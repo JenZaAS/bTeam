@@ -1,0 +1,79 @@
+# bTeam instance configuration: EXAMPLE ONLY.
+# Copy to instance.yaml (git-ignored) for a real deployment. No secrets belong in this file:
+# tokens and keys go in .env, and user accounts are created with the CLI.
+
+instance:
+  id: example-project
+  title: Example Project
+  locale: [en, nb]
+  theme: theme.json                  # optional colour/type tokens (not included yet); no colours in core code
+
+source:
+  type: git-mirror                   # read-only mirror, refreshed on a schedule
+  url: https://git.example.com/example-org/example-project.git
+  branch: main
+  refresh: 10m
+
+boxes:
+  - id: digest
+    type: digest
+    path: digest/                    # written by an external agent into the SOURCE repo
+    pattern: "digest/*.md"
+    latest: 1
+
+  - id: decisions
+    type: decisions
+    paths: ["docs/decisions/*.md"]
+    front_matter:                    # optional filters on front-matter tags
+      status: [accepted, superseded]
+
+  - id: gallery
+    type: gallery
+    root: "screenshots/"
+    group_by_folder: date            # e.g. screenshots/2026-01-15/
+    filename_pattern: "^(?:(?<variant>[a-z]+)-)?(?<page>[a-z0-9-]+)-(?<width>\\d+)\\.png$"
+    notes_file: NOTES.md             # optional notes shown next to each folder
+
+  - id: documents
+    type: documents
+    paths: ["docs/**/*.md", "README.md"]
+    features: [sections, toc, search, cross-links]
+
+  - id: questions
+    type: open-questions
+    issues:
+      labels: [question]
+    paths: ["docs/open-questions.md"]
+
+  - id: issues
+    type: issues
+    issues:
+      labels: [bug, design]
+      state: open
+
+  - id: source
+    type: source-browser
+    include: ["**/*"]
+    exclude: [".git/**", "node_modules/**", "**/*.lock"]
+
+issue_source:                         # read-only issue listing for the issues/questions boxes
+  type: github
+  repo: example-org/example-project
+  token_env: BTEAM_ISSUES_TOKEN       # read-only token, value in .env
+
+links:
+  - label: Example test site
+    url: https://test.example.com
+
+workshop:
+  enabled: true
+  max_items_per_user: 200
+
+inbox:
+  enabled: true                      # processed by an external agent, never posted directly
+
+assistant:
+  enabled: false                     # optional; one container per user when enabled
+  type: openai-compatible
+  per_user_endpoint: "http://assistant-{user}:8642/v1"
+  api_key_env: "BTEAM_ASSISTANT_KEY_{USER}"

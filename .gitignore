@@ -1,0 +1,31 @@
+# Secrets and local environment
+.env
+.env.*
+!.env.example
+
+# Runtime data
+data/
+*.db
+*.db-*
+*.sqlite
+*.sqlite3
+mirror/
+
+# Instance configs are deployment-specific and never committed
+instance/
+instances/
+instance.yaml
+!instance.example.yaml
+
+# Dependencies and builds
+node_modules/
+build/
+dist/
+.svelte-kit/
+
+# OS and editor files
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+*.log
