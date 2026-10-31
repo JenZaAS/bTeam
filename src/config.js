@@ -17,7 +17,7 @@ export const BOX_TYPES = {
 const COMMON_BOX_KEYS = ['id', 'type', 'title', 'description', 'visible_to'];
 const TOP_LEVEL_KEYS = [
   'instance', 'source', 'boxes', 'issue_source', 'links', 'roles', 'users', 'viewer', 'web',
-  'workshop', 'inbox', 'assistant',
+  'auth', 'workshop', 'inbox', 'assistant',
 ];
 const HIDE_KEYS = ['boxes', 'paths', 'issue_labels', 'issue_title_patterns'];
 const ID_RE = /^[a-z0-9][a-z0-9_-]{0,63}$/;
@@ -326,15 +326,79 @@ export function validateConfig(raw, { baseDir = process.cwd() } = {}) {
   }
 
   // web
-  const web = { frameAncestors: ["'self'"] };
+  const web = { frameAncestors: ["'self'"], secureCookies: true, sameSite: 'Lax', trustProxy: false };
   if (raw.web !== undefined) {
     if (!isObj(raw.web)) err('web must be a mapping');
     else {
-      unknownKeys(raw.web, ['frame_ancestors'], 'web');
+      unknownKeys(raw.web, ['frame_ancestors', 'secure_cookies', 'same_site', 'trust_proxy'], 'web');
       if (raw.web.frame_ancestors !== undefined) {
         const fa = strList(raw.web.frame_ancestors, 'web.frame_ancestors');
         if (fa.some((s) => !/^('self'|'none'|https:\/\/[\w.*:-]+)$/.test(s))) err("web.frame_ancestors entries must be 'self', 'none' or https:// origins");
         else web.frameAncestors = fa;
+      }
+      if (raw.web.secure_cookies !== undefined) {
+        if (typeof raw.web.secure_cookies !== 'boolean') err('web.secure_cookies must be true or false');
+        else web.secureCookies = raw.web.secure_cookies;
+      }
+      if (raw.web.same_site !== undefined) {
+        const v = String(raw.web.same_site).toLowerCase();
+        if (!['lax', 'strict'].includes(v)) err('web.same_site must be lax or strict');
+        else web.sameSite = v === 'lax' ? 'Lax' : 'Strict';
+      }
+      if (raw.web.trust_proxy !== undefined) {
+        if (typeof raw.web.trust_proxy !== 'boolean') err('web.trust_proxy must be true or false');
+        else web.trustProxy = raw.web.trust_proxy;
+      }
+    }
+  }
+
+  // auth (login, sessions, rate limiting)
+  const auth = { sessionIdleMs: 12 * 3600_000, sessionMaxMs: 7 * 86_400_000, maxFailures: 5, lockoutMs: 15 * 60_000, maxAttemptsPerClient: 20, minPasswordLength: 12 };
+  if (raw.auth !== undefined) {
+    if (!isObj(raw.auth)) err('auth must be a mapping');
+    else {
+      const keys = { session_idle: 'sessionIdleMs', session_max: 'sessionMaxMs', lockout: 'lockoutMs' };
+      const ints = { max_failures: ['maxFailures', 1, 100], max_attempts_per_client: ['maxAttemptsPerClient', 1, 1000], min_password_length: ['minPasswordLength', 10, 128] };
+      unknownKeys(raw.auth, [...Object.keys(keys), ...Object.keys(ints)], 'auth');
+      for (const [k, prop] of Object.entries(keys)) {
+        if (raw.auth[k] === undefined) continue;
+        try {
+          auth[prop] = parseDuration(raw.auth[k]);
+        } catch (e) {
+          err(`auth.${k}: ${e.message}`);
+        }
+      }
+      for (const [k, [prop, min, max]] of Object.entries(ints)) {
+        if (raw.auth[k] === undefined) continue;
+        if (!Number.isInteger(raw.auth[k]) || raw.auth[k] < min || raw.auth[k] > max) err(`auth.${k} must be an integer from ${min} to ${max}`);
+        else auth[prop] = raw.auth[k];
+      }
+      if (auth.sessionIdleMs > auth.sessionMaxMs) err('auth.session_idle must not exceed auth.session_max');
+    }
+  }
+
+  // workshop and inbox
+  const workshop = { enabled: true, maxItemsPerUser: 200 };
+  if (raw.workshop !== undefined) {
+    if (!isObj(raw.workshop)) err('workshop must be a mapping');
+    else {
+      unknownKeys(raw.workshop, ['enabled', 'max_items_per_user'], 'workshop');
+      if (raw.workshop.enabled !== undefined) workshop.enabled = raw.workshop.enabled === true;
+      if (raw.workshop.max_items_per_user !== undefined) {
+        if (!Number.isInteger(raw.workshop.max_items_per_user) || raw.workshop.max_items_per_user < 1) err('workshop.max_items_per_user must be a positive integer');
+        else workshop.maxItemsPerUser = raw.workshop.max_items_per_user;
+      }
+    }
+  }
+  const inbox = { enabled: true, ownerQuestionLabel: null };
+  if (raw.inbox !== undefined) {
+    if (!isObj(raw.inbox)) err('inbox must be a mapping');
+    else {
+      unknownKeys(raw.inbox, ['enabled', 'owner_question_label'], 'inbox');
+      if (raw.inbox.enabled !== undefined) inbox.enabled = raw.inbox.enabled === true;
+      if (raw.inbox.owner_question_label !== undefined) {
+        if (!/^[\w:. -]{1,50}$/.test(String(raw.inbox.owner_question_label))) err('inbox.owner_question_label must be a short label name');
+        else inbox.ownerQuestionLabel = String(raw.inbox.owner_question_label);
       }
     }
   }
@@ -350,9 +414,10 @@ export function validateConfig(raw, { baseDir = process.cwd() } = {}) {
     defaultRole,
     links,
     web,
-    // Later steps; kept as-is so one file serves the whole instance.
-    workshop: raw.workshop ?? null,
-    inbox: raw.inbox ?? null,
+    auth,
+    workshop,
+    inbox,
+    // Later step; kept as-is so one file serves the whole instance.
     assistant: raw.assistant ?? null,
   };
 }

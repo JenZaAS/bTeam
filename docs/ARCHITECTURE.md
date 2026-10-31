@@ -48,16 +48,27 @@ Boxes are filled by **rules in the instance config**: path globs, filename patte
 | `source-browser` | A file tree and file viewer over the mirror, with include/exclude globs. |
 
 ## 4a. Roles and visibility
-- The instance config defines **roles**. Users get a role when they are created (step 2); `users:` in the config may map user ids to roles, never credentials.
+- The instance config defines **roles**. Each user account (in the instance database) has one role; `users:` in the config may only suggest a default role for `bteam user add`, never credentials.
 - A role can only **hide** content, never add it: box ids, path globs, issue label globs and issue title patterns.
 - Hiding applies everywhere: box lists, documents, raw files and images, links (they become dead links) and search.
 - A file is reachable only if it is inside at least one box the role can see and not hidden for that role (deny by default).
-- A role may carry a **policy** for the Inbox agent, e.g. which kinds of contribution may be adopted directly (`auto_accept_eligible`) and where everything else goes (`route_other_to`). The core only exposes it; the agent applies it.
+- A role may carry a **policy** for the Inbox agent, e.g. which kinds of contribution may be adopted directly (`auto_accept_eligible`) and where everything else goes (`route_other_to`). bTeam stamps each submission with the resulting route; the agent decides and acts.
 
 ## 4b. Implementation (step 1)
-- Node.js (20+), plain `node:http`, server-rendered HTML with no client scripts. Dependencies: `yaml` (ISC), `marked` (MIT), `picomatch` (MIT).
+- Node.js (22+ since step 2), plain `node:http`, server-rendered HTML with no client scripts. Dependencies: `yaml` (ISC), `marked` (MIT), `picomatch` (MIT).
 - The mirror is a bare repository (`git init --bare` + `fetch` of the configured branch); files are read with `git ls-tree`/`git cat-file`, never checked out.
 - Read tools: `status`, `list_boxes`, `get_box`, `get_document`, `search` (CLI `bteam tool …` and `api/<tool>`).
+
+## 4c. Implementation (step 2)
+- State lives in `<data>/<instance id>.sqlite` (`better-sqlite3`, MIT; file mode 0600, directory 0700). Schema migrations run on open (`PRAGMA user_version`).
+- Passwords: argon2id via `@node-rs/argon2` (MIT), m=19456 KiB, t=2, p=1. Unknown users are checked against a dummy hash so timing does not reveal which accounts exist.
+- Sessions: 32 random bytes in a cookie (`__Host-bteam_session`: HttpOnly, Secure, SameSite=Lax by default, Path=/); only the SHA-256 of the token is stored. A new session is issued on every login and the old one is deleted. Idle (12 h) and absolute (7 d) expiry. Password reset, role change and disable end all of the user's sessions.
+- CSRF: a per-session token in every form, checked in constant time on every POST, plus an Origin check. The login form uses a pre-session double-submit cookie. Only `application/x-www-form-urlencoded` bodies up to 64 KiB are accepted.
+- Rate limiting: failed logins are counted per account (5 per 15 min, then a 15 min lock) and per client address (20 per 15 min). All failures show the same message.
+- Every page, image, file and `api/` call needs a session; only `login`, `healthz` and the two stylesheets are public. Visibility rules use the signed-in user's role.
+- Development override: `serve --dev-user <id>` acts as an existing user without login, only when bound to a loopback address and only for loopback clients, with a visible banner.
+- Workshop items (`note`, `idea`) are Markdown rendered with the same safe renderer as documents; every query is scoped to the owner; edits use optimistic versioning and keep earlier versions. `workshop_attachments` is reserved for mockups and colour profiles.
+- Inbox items have a kind (`idea`, `ui`, `bug`, `question`), an optional reference to a box or document the user can see (`box:<id>`, `doc:<path>`), an optional own Workshop item, a route from the role policy and an event log.
 
 ## 5. Digest
 - An **external agent** writes the digest on a schedule into a `digest/` folder **in the source repository**, via that repository's normal review flow.
@@ -66,7 +77,7 @@ Boxes are filled by **rules in the instance config**: path globs, filename patte
 
 ## 6. Workshop
 - Each user has their own editable space with create, read, update and delete.
-- Item types: notes, mockups (images/HTML snippets), colour profiles and sketches. Items are versioned so users can iterate.
+- Item types: notes and ideas (step 2); mockups (images/HTML snippets), colour profiles and sketches later. Items are versioned so users can iterate.
 - An optional assistant (section 9) can create and revise items during a conversation.
 - Workshop data is private to its user unless the user sends an item to the Inbox.
 
@@ -74,7 +85,9 @@ Boxes are filled by **rules in the instance config**: path globs, filename patte
 - Users **submit contributions** (text plus optional Workshop items).
 - An **external agent** processes the Inbox into issues, digest items or follow-up questions back to the user.
 - **Users never post to the source repository or the forge directly**, and bTeam holds no write credentials to them.
-- Each submission has a status (`new`, `in-review`, `turned-into-issue`, `answered`, `declined`) and a reply field, so users can see what happened.
+- Each submission has a status (`new`, `triaged`, `accepted`, `issue-created`, `digest`, `question-back`, `rejected`), a reply and an optional issue URL, so users can see what happened. Users see only their own submissions; when a question is sent back they can answer, and the item returns to `new`.
+- **Routing** from the submitter's role policy: kinds in `auto_accept_eligible` are marked `auto-accept-eligible` (the agent may adopt them directly when they fit the system and are sound); other kinds go to `route_other_to` as `owner-decision`, tagged with `inbox.owner_question_label`; roles without a policy get `standard`.
+- The agent works through the CLI on the server: `bteam inbox list [--status S] [--json]`, `bteam inbox show <id>`, `bteam inbox update <id> --status S [--reply T] [--issue-url URL] [--note T]`. bTeam only records the decision; the agent creates issues with its own credentials.
 
 ## 8. Storage
 - One **SQLite** database per instance: users, sessions, Workshop items (with versions), Inbox submissions and an audit log.
@@ -99,6 +112,7 @@ All core logic is exposed as tools, so the same core can serve the web UI, an as
 - **Login rate limiting** per account and per client.
 - Users are **created from the CLI** on the server (`bteam user add <name>`), with the password entered locally. There is no self-signup.
 - Deny by default: every route, including images and files, requires a session.
+- Users are managed with `bteam user add|reset|list|set-role|disable|enable|unlock`; passwords are typed at a hidden prompt or piped with `--password-stdin`, never given as arguments.
 
 ## 12. DigSys module (later)
 - Target: the core can run as a DigSys module, with a `digsys.module.json` (working id `local.bteam`), an MCP server exposing the read/propose/apply tools, and the UI as a viewer.

@@ -5,7 +5,7 @@ import { localized } from './config.js';
 
 const q = encodeURIComponent;
 
-export function layout({ t, locale, status, boxes, title, body, currentBox = null, query = '' }) {
+export function layout({ t, locale, status, boxes, title, body, currentBox = null, query = '', user = null, section = null, flash = null }) {
   const nav = boxes
     .map((b) => `<li><a href="box?id=${q(b.id)}"${b.id === currentBox ? ' aria-current="page"' : ''}>${e(localized(b.title, locale))}</a></li>`)
     .join('');
@@ -26,16 +26,26 @@ export function layout({ t, locale, status, boxes, title, body, currentBox = nul
 <body>
 <header class="bt-header">
   <a class="bt-brand" href="./">${e(status.instance.title)}</a>
-  <form class="bt-search" action="search" method="get" role="search">
+  ${user ? `<form class="bt-search" action="search" method="get" role="search">
     <input type="search" name="q" value="${e(query)}" placeholder="${e(t.searchPlaceholder)}" aria-label="${e(t.search)}" minlength="2" maxlength="200">
     <button type="submit">${e(t.search)}</button>
-  </form>
+  </form>` : ''}
 </header>
-<nav class="bt-nav" aria-label="${e(t.home)}"><ul><li><a href="./"${currentBox === '' ? ' aria-current="page"' : ''}>${e(t.home)}</a></li>${nav}</ul></nav>
+${user ? `<nav class="bt-nav" aria-label="${e(t.home)}"><ul><li><a href="./"${currentBox === '' ? ' aria-current="page"' : ''}>${e(t.home)}</a></li>${nav}${
+    user.workshop ? `<li class="bt-nav-app"><a href="workshop"${section === 'workshop' ? ' aria-current="page"' : ''}>${e(t.workshop)}</a></li>` : ''
+  }${user.inbox ? `<li class="bt-nav-app"><a href="inbox"${section === 'inbox' ? ' aria-current="page"' : ''}>${e(t.inbox)}</a></li>` : ''}</ul></nav>` : ''}
+${user?.dev ? `<p class="bt-warn bt-dev">${e(t.devOverride)}</p>` : ''}
 <main class="bt-main">
+${flash ? `<p class="bt-flash" role="status">${e(flash)}</p>` : ''}
 ${body}
 </main>
-<footer class="bt-footer"><span>${src}</span><span>${e(t.previewRole)}: <code>${e(status.role)}</code></span></footer>
+<footer class="bt-footer"><span>${user ? src : ''}</span>${
+    user
+      ? `<span>${e(t.signedInAs)} <code>${e(user.id)}</code> (${e(t.role)}: <code>${e(user.role)}</code>)${
+          user.dev ? '' : ` <form class="bt-logout" action="logout" method="post"><input type="hidden" name="csrf" value="${e(user.csrf)}"><button type="submit">${e(t.logout)}</button></form>`
+        }</span>`
+      : ''
+  }</footer>
 </body>
 </html>`;
 }

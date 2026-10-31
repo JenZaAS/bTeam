@@ -60,3 +60,20 @@ test('users map to roles and may not carry credentials', () => {
   raw.users = [{ id: 'alpha', role: 'owner' }, { id: 'beta', role: 'designer', password: 'x' }];
   assert.throws(() => validateConfig(raw), /unknown key "password"/);
 });
+
+test('auth, web, workshop and inbox settings are validated with safe defaults', () => {
+  const base = sampleRawConfig('https://git.example.com/o/r.git');
+  const c = validateConfig(base);
+  assert.equal(c.web.secureCookies, true);
+  assert.equal(c.web.sameSite, 'Lax');
+  assert.equal(c.auth.maxFailures, 5);
+  assert.equal(c.auth.sessionIdleMs, 12 * 3600_000);
+  assert.equal(c.inbox.ownerQuestionLabel, 'needs-owner-decision');
+  const c2 = validateConfig({ ...base, auth: { session_idle: '30m', session_max: '1d', max_failures: 3 }, web: { same_site: 'strict', secure_cookies: false } });
+  assert.equal(c2.auth.sessionIdleMs, 30 * 60_000);
+  assert.equal(c2.web.sameSite, 'Strict');
+  assert.equal(c2.web.secureCookies, false);
+  for (const bad of [{ auth: { min_password_length: 4 } }, { auth: { session_idle: '8d' } }, { auth: { nope: 1 } }, { web: { same_site: 'none' } }, { web: { secure_cookies: 'yes' } }, { inbox: { owner_question_label: 'a\nb' } }]) {
+    assert.throws(() => validateConfig({ ...base, ...bad }), undefined, JSON.stringify(bad));
+  }
+});

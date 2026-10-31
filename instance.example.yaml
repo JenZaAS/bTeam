@@ -91,26 +91,38 @@ roles:
       paths: ["deploy/**"]           # globs, applied to lists, documents, files, images and search
       issue_labels: [security, "sev:*"]   # globs, case-insensitive
       issue_title_patterns: ["^security\\b"]   # regexes, case-insensitive
-    policy:                          # read by the external Inbox agent (step 2), not enforced by the core
+    policy:                          # sets each Inbox submission's route; the external agent acts on it
       auto_accept_eligible: [ui]     # contribution kinds that may be adopted directly when sound
       route_other_to: owner          # everything else becomes a question for this role
 
-users:                               # optional role mapping; credentials are never stored here
-  - { id: user-a, role: owner }
+users:                               # optional: default role for "bteam user add <id>"; accounts and
+  - { id: user-a, role: owner }      # password hashes live only in the instance database
   - { id: user-b, role: contributor }
 
 viewer:
-  default_role: contributor          # role used when none is given (step 1 has no login)
+  default_role: contributor          # role for "bteam tool" when --role is not given (the web UI uses the signed-in user's role)
 
 web:
   frame_ancestors: ["'self'"]        # who may embed the UI in an iframe
+  secure_cookies: true               # false is only accepted when serving on 127.0.0.1 / ::1 (plain http, local testing)
+  same_site: lax                     # lax or strict
+  trust_proxy: false                 # true only behind a reverse proxy that sets X-Forwarded-For / X-Forwarded-Host
 
-workshop:                            # step 4
+auth:                                # all optional; these are the defaults
+  session_idle: 12h                  # signed out after this long without activity
+  session_max: 7d                    # signed out after this long in any case
+  max_failures: 5                    # failed logins per account before a temporary lock
+  lockout: 15m                       # lock length, and the window failures are counted in
+  max_attempts_per_client: 20        # failed logins per client address within the window
+  min_password_length: 12
+
+workshop:                            # private notes and ideas per user
   enabled: true
   max_items_per_user: 200
 
-inbox:                               # step 2; processed by an external agent, never posted directly
+inbox:                               # processed by an external agent with "bteam inbox ...", never posted directly
   enabled: true
+  owner_question_label: needs-owner-decision   # recorded on items routed to the owner, for the agent to use
 
 assistant:                           # step 4; optional, one container per user when enabled
   enabled: false

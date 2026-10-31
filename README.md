@@ -8,7 +8,7 @@ bTeam is a small, self-hosted collaboration panel. It lets a few invited people 
 
 bTeam is **content-neutral**. The code knows nothing about any specific project: everything project-specific lives in one instance configuration (`instance.yaml`). A new deployment is just a new config.
 
-Status: step 1 (read-only core, source browser and instance config). No login yet; run it locally, see [docs/RUN.md](docs/RUN.md).
+Status: step 2 (login, private Workshop notes and the Inbox) on top of the step 1 read-only core. Not deployed yet; run it locally, see [docs/RUN.md](docs/RUN.md).
 
 - Architecture: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)
 - Roadmap: [docs/ROADMAP.md](docs/ROADMAP.md)
