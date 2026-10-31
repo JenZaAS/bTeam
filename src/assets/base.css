@@ -1,0 +1,51 @@
+/* bTeam base styles: neutral, mobile-first. Colours come from theme.css tokens or system colours. */
+:root { color-scheme: light dark; }
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  background: var(--bt-bg, Canvas);
+  color: var(--bt-fg, CanvasText);
+  font: 16px/1.55 var(--bt-font-body, system-ui, sans-serif);
+}
+a { color: var(--bt-link, LinkText); }
+h1, h2, h3 { font-family: var(--bt-font-heading, inherit); line-height: 1.25; }
+code, pre { font-family: var(--bt-font-mono, ui-monospace, monospace); font-size: 0.9em; }
+.bt-header, .bt-nav, .bt-main, .bt-footer { max-width: var(--bt-max-width, 72rem); margin: 0 auto; padding: 0.5rem 1rem; }
+.bt-header { display: flex; flex-wrap: wrap; gap: 0.5rem 1rem; align-items: center; justify-content: space-between; }
+.bt-brand { font-weight: 700; font-size: 1.15rem; text-decoration: none; color: inherit; }
+.bt-search { display: flex; gap: 0.25rem; flex: 1 1 16rem; max-width: 28rem; }
+.bt-search input { flex: 1; min-height: 44px; padding: 0 0.6rem; font: inherit; border: 1px solid var(--bt-border, GrayText); border-radius: var(--bt-radius, 6px); background: var(--bt-surface, Field); color: inherit; }
+.bt-search button { min-height: 44px; padding: 0 0.9rem; font: inherit; border-radius: var(--bt-radius, 6px); border: 1px solid var(--bt-border, GrayText); background: var(--bt-accent, ButtonFace); color: var(--bt-accent-fg, ButtonText); }
+.bt-nav ul { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 0.25rem 0.5rem; }
+.bt-nav a { display: inline-block; min-height: 44px; line-height: 44px; padding: 0 0.6rem; border-radius: var(--bt-radius, 6px); text-decoration: none; }
+.bt-nav a[aria-current] { outline: 2px solid var(--bt-accent, Highlight); }
+.bt-footer { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 0.5rem; color: var(--bt-muted, GrayText); font-size: 0.85rem; border-top: 1px solid var(--bt-border, GrayText); margin-top: 2rem; }
+.bt-cards { list-style: none; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(15rem, 1fr)); gap: 0.75rem; }
+.bt-card { padding: 0.75rem 1rem; border: 1px solid var(--bt-border, GrayText); border-radius: var(--bt-radius, 6px); background: var(--bt-surface, transparent); }
+.bt-card a { display: block; min-height: 44px; line-height: 44px; }
+.bt-type, .bt-path, .bt-count, .bt-date { color: var(--bt-muted, GrayText); font-size: 0.85rem; }
+.bt-path { font-family: var(--bt-font-mono, ui-monospace, monospace); overflow-wrap: anywhere; }
+.bt-list li, .bt-tree li, .bt-results li { margin: 0.35rem 0; }
+.bt-tree { list-style: none; padding-left: 0; }
+.bt-label { display: inline-block; padding: 0 0.4rem; margin: 0 0.25rem 0.25rem 0; border: 1px solid var(--bt-border, GrayText); border-radius: 999px; font-size: 0.8rem; }
+.bt-issues { list-style: none; padding: 0; }
+.bt-issue { padding: 0.6rem 0; border-bottom: 1px solid var(--bt-border, GrayText); }
+.bt-num, .bt-state { color: var(--bt-muted, GrayText); }
+.bt-warn { padding: 0.5rem 0.75rem; border-left: 4px solid var(--bt-warn, Mark); }
+.bt-empty, .bt-note { color: var(--bt-muted, GrayText); }
+.bt-md { overflow-wrap: anywhere; }
+.bt-md img, .bt-full { max-width: 100%; height: auto; }
+.bt-md table { border-collapse: collapse; display: block; overflow-x: auto; }
+.bt-md td, .bt-md th { border: 1px solid var(--bt-border, GrayText); padding: 0.25rem 0.5rem; }
+.bt-md pre, .bt-code { overflow-x: auto; padding: 0.75rem; border: 1px solid var(--bt-border, GrayText); border-radius: var(--bt-radius, 6px); }
+article.bt-md { padding-bottom: 1rem; margin-bottom: 1rem; border-bottom: 1px solid var(--bt-border, GrayText); }
+.bt-toc ul { padding-left: 1rem; }
+.bt-toc-3 { margin-left: 1rem; }
+.bt-filter { margin: 0.4rem 0; display: flex; flex-wrap: wrap; gap: 0.25rem 0.6rem; align-items: center; }
+.bt-filter a { min-height: 44px; line-height: 44px; padding: 0 0.3rem; }
+.bt-filter a[aria-current] { font-weight: 700; }
+.bt-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(10rem, 1fr)); gap: 0.75rem; }
+.bt-grid figure { margin: 0; }
+.bt-grid img { width: 100%; height: auto; border: 1px solid var(--bt-border, GrayText); border-radius: var(--bt-radius, 6px); }
+.bt-grid figcaption { font-size: 0.85rem; color: var(--bt-muted, GrayText); }
+.bt-deadlink { text-decoration: underline dotted; }

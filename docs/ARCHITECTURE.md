@@ -1,6 +1,6 @@
 # bTeam architecture
 
-Status: approved design direction, before any code. Items marked **OPEN** are not decided yet.
+Status: approved design direction; step 1 (sections 3, 4, 4a and the read tools of 10) is implemented. Items marked **OPEN** are not decided yet.
 
 ## 1. Principles
 - **Content-neutral core:**
@@ -46,6 +46,18 @@ Boxes are filled by **rules in the instance config**: path globs, filename patte
 | `open-questions` | Questions from issues with a label and/or a questions file. |
 | `issues` | Open issues filtered by label and state. |
 | `source-browser` | A file tree and file viewer over the mirror, with include/exclude globs. |
+
+## 4a. Roles and visibility
+- The instance config defines **roles**. Users get a role when they are created (step 2); `users:` in the config may map user ids to roles, never credentials.
+- A role can only **hide** content, never add it: box ids, path globs, issue label globs and issue title patterns.
+- Hiding applies everywhere: box lists, documents, raw files and images, links (they become dead links) and search.
+- A file is reachable only if it is inside at least one box the role can see and not hidden for that role (deny by default).
+- A role may carry a **policy** for the Inbox agent, e.g. which kinds of contribution may be adopted directly (`auto_accept_eligible`) and where everything else goes (`route_other_to`). The core only exposes it; the agent applies it.
+
+## 4b. Implementation (step 1)
+- Node.js (20+), plain `node:http`, server-rendered HTML with no client scripts. Dependencies: `yaml` (ISC), `marked` (MIT), `picomatch` (MIT).
+- The mirror is a bare repository (`git init --bare` + `fetch` of the configured branch); files are read with `git ls-tree`/`git cat-file`, never checked out.
+- Read tools: `status`, `list_boxes`, `get_box`, `get_document`, `search` (CLI `bteam tool …` and `api/<tool>`).
 
 ## 5. Digest
 - An **external agent** writes the digest on a schedule into a `digest/` folder **in the source repository**, via that repository's normal review flow.

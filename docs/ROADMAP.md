@@ -2,11 +2,12 @@
 
 Each step ends with tests, a security check of anything exposed, and an OK before the next step.
 
-1. **Core, source browser and instance config**
+1. **Core, source browser and instance config** (built on a feature branch; awaiting review)
    - read-only git mirror with scheduled refresh;
    - instance.yaml loader and validation;
    - box types: digest, decisions, gallery, documents, open questions, issues and source browser;
    - read tools (`list_boxes`, `get_box`, `get_document`, `search`);
+   - roles with visibility rules (hide boxes, paths and issues per role) and an optional role policy for the Inbox agent;
    - a plain web UI that also works in a sandboxed iframe.
 2. **Login and Inbox**
    - individual users with argon2id, secure cookies and login rate limiting;

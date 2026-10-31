@@ -1,37 +1,52 @@
 # bTeam instance configuration: EXAMPLE ONLY.
 # Copy to instance.yaml (git-ignored) for a real deployment. No secrets belong in this file:
-# tokens and keys go in .env, and user accounts are created with the CLI.
+# tokens and keys go in .env (referenced by *_env names), and user accounts are created with the CLI.
+# Validate with: node bin/bteam.js check --config instance.yaml
 
 instance:
   id: example-project
   title: Example Project
-  locale: [en, nb]
-  theme: theme.json                  # optional colour/type tokens (not included yet); no colours in core code
+  locale: [en, nb]                   # first entry is the default UI language
+  theme: theme.json                  # optional colour/type tokens, see docs/RUN.md; no colours in core code
 
 source:
-  type: git-mirror                   # read-only mirror, refreshed on a schedule
-  url: https://git.example.com/example-org/example-project.git
+  type: git-mirror                   # read-only bare mirror, refreshed on a schedule (never a mounted share)
+  url: https://git.example.com/example-org/example-project.git   # never put credentials in the URL
   branch: main
-  refresh: 10m
+  refresh: 10m                       # minimum 1m
+  token_env: BTEAM_SOURCE_TOKEN      # optional read-only token for private https repos; value in .env
 
+# Boxes are generic and read-only. Titles may be a string or {locale: text}.
 boxes:
   - id: digest
     type: digest
-    path: digest/                    # written by an external agent into the SOURCE repo
-    pattern: "digest/*.md"
-    latest: 1
+    title: { en: Digest, nb: Siste nytt }
+    pattern: "digest/*.md"           # written by an external agent into the SOURCE repo; README.md is skipped
+    latest: 1                        # how many of the newest files to show in full
+
+  - id: now
+    type: documents
+    title: Now
+    paths: ["PLAN.md"]
+    sections:                        # show only sections whose heading matches, newest (last in file) first
+      heading: "^Status\\b"
+      latest: 2
+      level: 2
 
   - id: decisions
     type: decisions
-    paths: ["docs/decisions/*.md"]
-    front_matter:                    # optional filters on front-matter tags
+    paths: ["docs/decisions/*.md"]   # date/status from front matter or "Date:"/"Status:" lines
+    front_matter:                    # optional filters
       status: [accepted, superseded]
+    fallback:                        # optional: shown while no records exist
+      file: PLAN.md
+      heading: "^Later\\b"
 
   - id: gallery
     type: gallery
     root: "screenshots/"
-    group_by_folder: date            # e.g. screenshots/2026-01-15/
-    filename_pattern: "^(?:(?<variant>[a-z]+)-)?(?<page>[a-z0-9-]+)-(?<width>\\d+)\\.png$"
+    group_by_folder: date            # date (newest first), folder (A-Z) or none
+    filename_pattern: "^(?:(?<variant>[a-z]+)-)?(?<page>[a-z0-9-]+)-(?<width>\\d+)\\.png$"   # named groups become filters
     notes_file: NOTES.md             # optional notes shown next to each folder
 
   - id: documents
@@ -42,38 +57,63 @@ boxes:
   - id: questions
     type: open-questions
     issues:
-      labels: [question]
+      labels: [needs-owner-decision]
     paths: ["docs/open-questions.md"]
 
   - id: issues
     type: issues
     issues:
-      labels: [bug, design]
-      state: open
+      labels: [bug, design]          # any of these; [] = all
+      state: open                    # open, closed or all
 
   - id: source
     type: source-browser
     include: ["**/*"]
-    exclude: [".git/**", "node_modules/**", "**/*.lock"]
+    exclude: ["node_modules/**", "**/*.lock", "**/.env*"]
 
-issue_source:                         # read-only issue listing for the issues/questions boxes
+issue_source:                        # read-only issue listing for the issues/questions boxes
   type: github
   repo: example-org/example-project
-  token_env: BTEAM_ISSUES_TOKEN       # read-only token, value in .env
+  token_env: BTEAM_ISSUES_TOKEN      # read-only token, value in .env
+  refresh: 10m
 
 links:
   - label: Example test site
     url: https://test.example.com
 
-workshop:
+# Visibility: roles only ever HIDE content; boxes define what exists at all.
+roles:
+  owner:
+    description: Sees everything.
+  contributor:
+    hide:
+      boxes: []                      # box ids
+      paths: ["deploy/**"]           # globs, applied to lists, documents, files, images and search
+      issue_labels: [security, "sev:*"]   # globs, case-insensitive
+      issue_title_patterns: ["^security\\b"]   # regexes, case-insensitive
+    policy:                          # read by the external Inbox agent (step 2), not enforced by the core
+      auto_accept_eligible: [ui]     # contribution kinds that may be adopted directly when sound
+      route_other_to: owner          # everything else becomes a question for this role
+
+users:                               # optional role mapping; credentials are never stored here
+  - { id: user-a, role: owner }
+  - { id: user-b, role: contributor }
+
+viewer:
+  default_role: contributor          # role used when none is given (step 1 has no login)
+
+web:
+  frame_ancestors: ["'self'"]        # who may embed the UI in an iframe
+
+workshop:                            # step 4
   enabled: true
   max_items_per_user: 200
 
-inbox:
-  enabled: true                      # processed by an external agent, never posted directly
+inbox:                               # step 2; processed by an external agent, never posted directly
+  enabled: true
 
-assistant:
-  enabled: false                     # optional; one container per user when enabled
+assistant:                           # step 4; optional, one container per user when enabled
+  enabled: false
   type: openai-compatible
   per_user_endpoint: "http://assistant-{user}:8642/v1"
   api_key_env: "BTEAM_ASSISTANT_KEY_{USER}"
