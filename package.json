@@ -1,0 +1,24 @@
+{
+  "name": "bteam",
+  "version": "0.1.0",
+  "description": "Self-hosted, content-neutral collaboration panel: read-only views of a project repository.",
+  "license": "MIT",
+  "private": true,
+  "type": "module",
+  "bin": {
+    "bteam": "bin/bteam.js"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "start": "node bin/bteam.js serve",
+    "check": "node bin/bteam.js check",
+    "test": "node --test"
+  },
+  "dependencies": {
+    "marked": "18.1.2",
+    "picomatch": "4.0.7",
+    "yaml": "2.9.1"
+  }
+}

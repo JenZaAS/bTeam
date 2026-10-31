@@ -1,0 +1,365 @@
+// Loads and validates one instance configuration (instance.yaml).
+// The core knows only generic concepts; everything project-specific comes from this file.
+import fs from 'node:fs';
+import path from 'node:path';
+import YAML from 'yaml';
+import { parseDuration } from './util.js';
+
+export const BOX_TYPES = {
+  digest: ['path', 'pattern', 'latest'],
+  decisions: ['paths', 'front_matter', 'fallback'],
+  gallery: ['root', 'extra_roots', 'group_by_folder', 'filename_pattern', 'notes_file'],
+  documents: ['paths', 'sections', 'features'],
+  'open-questions': ['issues', 'paths'],
+  issues: ['issues'],
+  'source-browser': ['include', 'exclude'],
+};
+const COMMON_BOX_KEYS = ['id', 'type', 'title', 'description', 'visible_to'];
+const TOP_LEVEL_KEYS = [
+  'instance', 'source', 'boxes', 'issue_source', 'links', 'roles', 'users', 'viewer', 'web',
+  'workshop', 'inbox', 'assistant',
+];
+const HIDE_KEYS = ['boxes', 'paths', 'issue_labels', 'issue_title_patterns'];
+const ID_RE = /^[a-z0-9][a-z0-9_-]{0,63}$/;
+const ENV_RE = /^[A-Z][A-Z0-9_]{0,127}$/;
+
+export class ConfigError extends Error {
+  constructor(errors) {
+    super(`invalid instance config:\n  - ${errors.join('\n  - ')}`);
+    this.errors = errors;
+  }
+}
+
+export function loadConfig(file) {
+  const abs = path.resolve(file);
+  let raw;
+  try {
+    raw = YAML.parse(fs.readFileSync(abs, 'utf8'));
+  } catch (err) {
+    throw new ConfigError([`cannot read ${abs}: ${err.message}`]);
+  }
+  return validateConfig(raw, { baseDir: path.dirname(abs) });
+}
+
+export function validateConfig(raw, { baseDir = process.cwd() } = {}) {
+  const errors = [];
+  const err = (m) => errors.push(m);
+  const isObj = (v) => v && typeof v === 'object' && !Array.isArray(v);
+  const strList = (v, where) => {
+    if (v === undefined) return [];
+    if (!Array.isArray(v) || v.some((s) => typeof s !== 'string')) {
+      err(`${where} must be a list of strings`);
+      return [];
+    }
+    return v;
+  };
+  const regex = (v, where) => {
+    try {
+      return new RegExp(v, 'u');
+    } catch (e) {
+      err(`${where} is not a valid regular expression: ${e.message}`);
+      return null;
+    }
+  };
+  const unknownKeys = (obj, allowed, where) => {
+    for (const k of Object.keys(obj)) if (!allowed.includes(k)) err(`${where}: unknown key "${k}"`);
+  };
+
+  if (!isObj(raw)) throw new ConfigError(['config must be a YAML mapping']);
+  unknownKeys(raw, TOP_LEVEL_KEYS, 'top level');
+
+  // instance
+  const inst = raw.instance;
+  const instance = { id: 'instance', title: 'bTeam', locale: ['en'], theme: null };
+  if (!isObj(inst)) err('instance: required mapping');
+  else {
+    unknownKeys(inst, ['id', 'title', 'locale', 'theme'], 'instance');
+    if (!ID_RE.test(String(inst.id ?? ''))) err('instance.id must be a lowercase slug');
+    else instance.id = inst.id;
+    if (typeof inst.title !== 'string' || !inst.title.trim()) err('instance.title is required');
+    else instance.title = inst.title;
+    if (inst.locale !== undefined) {
+      const loc = Array.isArray(inst.locale) ? inst.locale : [inst.locale];
+      if (!loc.length || loc.some((l) => !/^[a-z]{2,3}(-[A-Za-z]{2,4})?$/.test(String(l)))) err('instance.locale must be language codes');
+      else instance.locale = loc;
+    }
+    if (inst.theme !== undefined) {
+      if (typeof inst.theme !== 'string') err('instance.theme must be a file path');
+      else instance.theme = path.resolve(baseDir, inst.theme);
+    }
+  }
+
+  // source
+  const src = raw.source;
+  const source = { type: 'git-mirror', url: '', branch: 'main', refreshMs: 600_000, tokenEnv: null };
+  if (!isObj(src)) err('source: required mapping');
+  else {
+    unknownKeys(src, ['type', 'url', 'branch', 'refresh', 'token_env'], 'source');
+    if (src.type !== 'git-mirror') err('source.type must be "git-mirror"');
+    const url = String(src.url ?? '');
+    if (!url) err('source.url is required');
+    else if (/^https?:\/\/[^/]*@/i.test(url)) err('source.url must not contain credentials; use source.token_env');
+    else if (!/^(https:\/\/|ssh:\/\/|git@[\w.-]+:|file:\/\/)/.test(url)) err('source.url must be https://, ssh://, git@host: or file://');
+    source.url = url;
+    if (src.branch !== undefined) {
+      if (!/^[\w./-]{1,200}$/.test(String(src.branch)) || String(src.branch).includes('..')) err('source.branch is not a valid branch name');
+      else source.branch = String(src.branch);
+    }
+    if (src.refresh !== undefined) {
+      try {
+        source.refreshMs = parseDuration(src.refresh);
+        if (source.refreshMs < 60_000) err('source.refresh must be at least 1m');
+      } catch (e) {
+        err(`source.refresh: ${e.message}`);
+      }
+    }
+    if (src.token_env !== undefined) {
+      if (!ENV_RE.test(String(src.token_env))) err('source.token_env must be an environment variable NAME');
+      else source.tokenEnv = src.token_env;
+    }
+  }
+
+  // issue source
+  let issueSource = null;
+  if (raw.issue_source !== undefined) {
+    const is = raw.issue_source;
+    if (!isObj(is)) err('issue_source must be a mapping');
+    else {
+      unknownKeys(is, ['type', 'repo', 'token_env', 'api_url', 'refresh', 'max_pages'], 'issue_source');
+      if (is.type !== 'github') err('issue_source.type must be "github"');
+      if (!/^[\w.-]+\/[\w.-]+$/.test(String(is.repo ?? ''))) err('issue_source.repo must be "owner/name"');
+      if (is.token_env !== undefined && !ENV_RE.test(String(is.token_env))) err('issue_source.token_env must be an environment variable NAME');
+      if (is.api_url !== undefined && !/^https:\/\//.test(String(is.api_url))) err('issue_source.api_url must be https://');
+      let refreshMs = source.refreshMs;
+      if (is.refresh !== undefined) {
+        try {
+          refreshMs = parseDuration(is.refresh);
+        } catch (e) {
+          err(`issue_source.refresh: ${e.message}`);
+        }
+      }
+      issueSource = {
+        type: 'github',
+        repo: is.repo,
+        tokenEnv: is.token_env ?? null,
+        apiUrl: is.api_url ?? 'https://api.github.com',
+        refreshMs,
+        maxPages: Number.isInteger(is.max_pages) ? is.max_pages : 5,
+      };
+    }
+  }
+
+  // roles and users (visibility)
+  const roles = {};
+  if (raw.roles !== undefined) {
+    if (!isObj(raw.roles)) err('roles must be a mapping of role name -> rules');
+    else {
+      for (const [name, r] of Object.entries(raw.roles)) {
+        if (!ID_RE.test(name)) err(`roles: "${name}" is not a valid role name`);
+        const rr = r ?? {};
+        if (!isObj(rr)) {
+          err(`roles.${name} must be a mapping`);
+          continue;
+        }
+        unknownKeys(rr, ['description', 'hide', 'policy'], `roles.${name}`);
+        const hide = rr.hide ?? {};
+        if (!isObj(hide)) err(`roles.${name}.hide must be a mapping`);
+        else unknownKeys(hide, HIDE_KEYS, `roles.${name}.hide`);
+        const titleRes = strList(hide.issue_title_patterns, `roles.${name}.hide.issue_title_patterns`).map((p) => {
+          try {
+            return new RegExp(p, 'iu');
+          } catch (e) {
+            err(`roles.${name}.hide.issue_title_patterns: ${e.message}`);
+            return null;
+          }
+        });
+        if (rr.policy !== undefined && !isObj(rr.policy)) err(`roles.${name}.policy must be a mapping`);
+        roles[name] = {
+          name,
+          description: typeof rr.description === 'string' ? rr.description : '',
+          hide: {
+            boxes: strList(hide.boxes, `roles.${name}.hide.boxes`),
+            paths: strList(hide.paths, `roles.${name}.hide.paths`),
+            issueLabels: strList(hide.issue_labels, `roles.${name}.hide.issue_labels`),
+            issueTitlePatterns: titleRes.filter(Boolean),
+          },
+          policy: isObj(rr.policy) ? rr.policy : {},
+        };
+      }
+      for (const r of Object.values(roles)) {
+        const target = r.policy.route_other_to;
+        if (target !== undefined && !roles[target]) err(`roles.${r.name}.policy.route_other_to: unknown role "${target}"`);
+        const ae = r.policy.auto_accept_eligible;
+        if (ae !== undefined && (!Array.isArray(ae) || ae.some((s) => typeof s !== 'string'))) err(`roles.${r.name}.policy.auto_accept_eligible must be a list of strings`);
+      }
+    }
+  }
+  if (!Object.keys(roles).length) roles.default = { name: 'default', description: '', hide: { boxes: [], paths: [], issueLabels: [], issueTitlePatterns: [] }, policy: {} };
+
+  const users = [];
+  if (raw.users !== undefined) {
+    if (!Array.isArray(raw.users)) err('users must be a list of {id, role}');
+    else
+      for (const [i, u] of raw.users.entries()) {
+        if (!isObj(u)) {
+          err(`users[${i}] must be a mapping`);
+          continue;
+        }
+        unknownKeys(u, ['id', 'role'], `users[${i}]`);
+        if (!ID_RE.test(String(u.id ?? ''))) err(`users[${i}].id must be a lowercase slug`);
+        if (!roles[u.role]) err(`users[${i}].role: unknown role "${u.role}"`);
+        if (/password|secret|token/i.test(JSON.stringify(u))) err(`users[${i}]: credentials never belong in the config`);
+        users.push({ id: u.id, role: u.role });
+      }
+  }
+
+  let defaultRole = Object.keys(roles)[0];
+  if (raw.viewer !== undefined) {
+    if (!isObj(raw.viewer)) err('viewer must be a mapping');
+    else {
+      unknownKeys(raw.viewer, ['default_role'], 'viewer');
+      if (raw.viewer.default_role !== undefined) {
+        if (!roles[raw.viewer.default_role]) err(`viewer.default_role: unknown role "${raw.viewer.default_role}"`);
+        else defaultRole = raw.viewer.default_role;
+      }
+    }
+  }
+
+  // boxes
+  const boxes = [];
+  const ids = new Set();
+  if (!Array.isArray(raw.boxes) || !raw.boxes.length) err('boxes: at least one box is required');
+  else
+    for (const [i, b] of raw.boxes.entries()) {
+      const where = `boxes[${i}]`;
+      if (!isObj(b)) {
+        err(`${where} must be a mapping`);
+        continue;
+      }
+      if (!ID_RE.test(String(b.id ?? ''))) err(`${where}.id must be a lowercase slug`);
+      else if (ids.has(b.id)) err(`${where}.id "${b.id}" is duplicated`);
+      ids.add(b.id);
+      const allowed = BOX_TYPES[b.type];
+      if (!allowed) {
+        err(`${where}.type "${b.type}" is unknown (use one of: ${Object.keys(BOX_TYPES).join(', ')})`);
+        continue;
+      }
+      unknownKeys(b, [...COMMON_BOX_KEYS, ...allowed], `${where} (${b.type})`);
+      const title = b.title ?? b.id;
+      if (!(typeof title === 'string' || (isObj(title) && Object.values(title).every((t) => typeof t === 'string')))) err(`${where}.title must be a string or a {locale: text} mapping`);
+      const box = { id: b.id, type: b.type, title, description: b.description ?? '', visibleTo: strList(b.visible_to, `${where}.visible_to`) };
+      for (const r of box.visibleTo) if (!roles[r]) err(`${where}.visible_to: unknown role "${r}"`);
+
+      switch (b.type) {
+        case 'digest':
+          box.pattern = b.pattern ?? (b.path ? `${String(b.path).replace(/\/?$/, '/')}*.md` : null);
+          if (!box.pattern) err(`${where}: digest needs "pattern" or "path"`);
+          box.latest = Number.isInteger(b.latest) && b.latest > 0 ? b.latest : 1;
+          break;
+        case 'decisions':
+          box.paths = strList(b.paths, `${where}.paths`);
+          if (!box.paths.length && !b.fallback) err(`${where}: decisions needs "paths" or "fallback"`);
+          box.frontMatter = isObj(b.front_matter) ? b.front_matter : null;
+          if (b.fallback !== undefined) {
+            if (!isObj(b.fallback) || typeof b.fallback.file !== 'string') err(`${where}.fallback needs "file"`);
+            else box.fallback = { file: b.fallback.file, heading: b.fallback.heading ? regex(b.fallback.heading, `${where}.fallback.heading`) : null };
+          }
+          break;
+        case 'gallery': {
+          if (typeof b.root !== 'string' || !b.root) err(`${where}.root is required`);
+          const norm = (r) => String(r).replace(/^\.?\/*/, '').replace(/\/?$/, '/').replace(/^\/$/, '');
+          box.roots = [b.root, ...strList(b.extra_roots, `${where}.extra_roots`)].filter(Boolean).map(norm);
+          if (b.group_by_folder !== undefined && !['date', 'folder', 'none'].includes(b.group_by_folder)) err(`${where}.group_by_folder must be date, folder or none`);
+          box.groupBy = b.group_by_folder ?? 'folder';
+          box.filenamePattern = b.filename_pattern ? regex(b.filename_pattern, `${where}.filename_pattern`) : null;
+          box.notesFile = typeof b.notes_file === 'string' ? b.notes_file : null;
+          break;
+        }
+        case 'documents':
+          box.paths = strList(b.paths, `${where}.paths`);
+          if (!box.paths.length) err(`${where}.paths is required`);
+          box.features = strList(b.features, `${where}.features`);
+          if (b.sections !== undefined) {
+            if (!isObj(b.sections) || typeof b.sections.heading !== 'string') err(`${where}.sections needs "heading" (a regex)`);
+            else
+              box.sections = {
+                heading: regex(b.sections.heading, `${where}.sections.heading`),
+                latest: Number.isInteger(b.sections.latest) && b.sections.latest > 0 ? b.sections.latest : null,
+                level: Number.isInteger(b.sections.level) ? b.sections.level : 2,
+              };
+          }
+          break;
+        case 'open-questions':
+        case 'issues': {
+          const iss = b.issues;
+          if (iss !== undefined || b.type === 'issues') {
+            if (!isObj(iss ?? {})) err(`${where}.issues must be a mapping`);
+            box.issues = {
+              labels: strList(iss?.labels, `${where}.issues.labels`),
+              state: iss?.state ?? 'open',
+            };
+            if (!['open', 'closed', 'all'].includes(box.issues.state)) err(`${where}.issues.state must be open, closed or all`);
+            if (!issueSource) err(`${where}: needs a top-level issue_source`);
+          }
+          box.paths = strList(b.paths, `${where}.paths`);
+          if (b.type === 'open-questions' && !box.issues && !box.paths.length) err(`${where}: open-questions needs "issues" or "paths"`);
+          break;
+        }
+        case 'source-browser':
+          box.include = strList(b.include ?? ['**/*'], `${where}.include`);
+          box.exclude = strList(b.exclude, `${where}.exclude`);
+          break;
+      }
+      boxes.push(box);
+    }
+  for (const r of Object.values(roles)) for (const id of r.hide.boxes) if (!ids.has(id)) err(`roles.${r.name}.hide.boxes: unknown box "${id}"`);
+
+  // links
+  const links = [];
+  if (raw.links !== undefined) {
+    if (!Array.isArray(raw.links)) err('links must be a list');
+    else
+      for (const [i, l] of raw.links.entries()) {
+        if (!isObj(l) || typeof l.label !== 'string' || !/^https?:\/\//.test(String(l.url ?? ''))) err(`links[${i}] needs a label and an http(s) url`);
+        else links.push({ label: l.label, url: l.url });
+      }
+  }
+
+  // web
+  const web = { frameAncestors: ["'self'"] };
+  if (raw.web !== undefined) {
+    if (!isObj(raw.web)) err('web must be a mapping');
+    else {
+      unknownKeys(raw.web, ['frame_ancestors'], 'web');
+      if (raw.web.frame_ancestors !== undefined) {
+        const fa = strList(raw.web.frame_ancestors, 'web.frame_ancestors');
+        if (fa.some((s) => !/^('self'|'none'|https:\/\/[\w.*:-]+)$/.test(s))) err("web.frame_ancestors entries must be 'self', 'none' or https:// origins");
+        else web.frameAncestors = fa;
+      }
+    }
+  }
+
+  if (errors.length) throw new ConfigError(errors);
+  return {
+    instance,
+    source,
+    issueSource,
+    boxes,
+    roles,
+    users,
+    defaultRole,
+    links,
+    web,
+    // Later steps; kept as-is so one file serves the whole instance.
+    workshop: raw.workshop ?? null,
+    inbox: raw.inbox ?? null,
+    assistant: raw.assistant ?? null,
+  };
+}
+
+/** Localised text from a string or a {locale: text} mapping. */
+export function localized(value, locale) {
+  if (typeof value === 'string') return value;
+  if (value && typeof value === 'object') return value[locale] ?? Object.values(value)[0] ?? '';
+  return '';
+}
