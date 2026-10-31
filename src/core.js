@@ -252,6 +252,11 @@ export function createCore({ config, mirror, issues = null }) {
     config,
     reachable,
 
+    /** True once the source has been mirrored (no user data; used by /healthz). */
+    healthy() {
+      return Boolean(mirror.commitInfo);
+    },
+
     status(viewer) {
       return {
         instance: { id: config.instance.id, title: config.instance.title, locale: config.instance.locale },

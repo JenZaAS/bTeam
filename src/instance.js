@@ -4,6 +4,16 @@ import { loadConfig } from './config.js';
 import { Mirror } from './mirror.js';
 import { IssueSource } from './issues.js';
 import { createCore } from './core.js';
+import { openDb, dbPath } from './db.js';
+import { createAuth } from './auth.js';
+import { createWorkshop } from './workshop.js';
+import { createInbox } from './inbox.js';
+
+/** Open the per-instance SQLite state (users, sessions, Workshop, Inbox) under the data dir. */
+export function openState(config, dataDir) {
+  const db = openDb(dbPath(dataDir, config.instance.id));
+  return { db, auth: createAuth({ db, config }), workshop: createWorkshop({ db, config }), inbox: createInbox({ db, config }) };
+}
 
 export function openInstance({ configPath, dataDir, env = process.env, fetchImpl }) {
   const config = loadConfig(configPath);

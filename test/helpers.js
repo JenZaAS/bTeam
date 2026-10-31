@@ -7,6 +7,11 @@ import { Mirror } from '../src/mirror.js';
 import { IssueSource } from '../src/issues.js';
 import { createCore } from '../src/core.js';
 import { createViewer } from '../src/visibility.js';
+import { openState } from '../src/instance.js';
+import { createHandler, startServer } from '../src/server.js';
+
+// Test-only placeholder passwords (never real credentials).
+export const PW = { owner: 'test-only-placeholder-1', designer: 'test-only-placeholder-2' };
 
 // 1x1 PNG
 export const PNG = Buffer.from('89504e470d0a1a0a0000000d49484452000000010000000108060000001f15c4890000000d49444154789c6360000002000154a24f5d0000000049454e44ae426082', 'hex');
@@ -78,6 +83,7 @@ export function sampleRawConfig(url) {
       },
     },
     viewer: { default_role: 'owner' },
+    inbox: { owner_question_label: 'needs-owner-decision' },
   };
 }
 
@@ -108,4 +114,67 @@ export async function makeInstance({ raw, files } = {}) {
   await issues.refresh();
   const core = createCore({ config, mirror, issues });
   return { src, config, mirror, issues, core, owner: createViewer(config, 'owner'), designer: createViewer(config, 'designer') };
+}
+
+/** Instance + SQLite state + two placeholder users, with a running server. */
+export async function makeApp({ raw, now, handlerOptions = {} } = {}) {
+  const inst = await makeInstance({ raw });
+  const data = fs.mkdtempSync(path.join(os.tmpdir(), 'bteam-state-'));
+  const state = openState(inst.config, data);
+  if (now) {
+    // Rebuild with an injectable clock.
+    const { createAuth } = await import('../src/auth.js');
+    state.auth = createAuth({ db: state.db, config: inst.config, now });
+  }
+  await state.auth.addUser('owner', 'owner', PW.owner);
+  await state.auth.addUser('designer', 'designer', PW.designer);
+  const server = await startServer({ handler: createHandler({ core: inst.core, auth: state.auth, workshop: state.workshop, inbox: state.inbox, ...handlerOptions }), port: 0 });
+  const base = `http://127.0.0.1:${server.address().port}/`;
+  const close = () => {
+    server.closeAllConnections();
+    server.close();
+    state.db.close();
+  };
+  return { ...inst, state, data, server, base, close };
+}
+
+/** A tiny cookie-keeping client for tests. */
+export function client(base) {
+  const jar = new Map();
+  const store = (res) => {
+    for (const c of res.headers.getSetCookie()) {
+      const [pair, ...attrs] = c.split(';');
+      const [k, v] = [pair.slice(0, pair.indexOf('=')), pair.slice(pair.indexOf('=') + 1)];
+      if (attrs.some((a) => /max-age=0/i.test(a.trim()))) jar.delete(k);
+      else jar.set(k, v);
+    }
+  };
+  const cookie = () => [...jar].map(([k, v]) => `${k}=${v}`).join('; ');
+  const c = {
+    jar,
+    async get(p, headers = {}) {
+      const res = await fetch(base + p, { redirect: 'manual', headers: { cookie: cookie(), ...headers } });
+      store(res);
+      return { status: res.status, headers: res.headers, text: await res.text() };
+    },
+    async post(p, form, headers = {}) {
+      const res = await fetch(base + p, {
+        method: 'POST',
+        redirect: 'manual',
+        headers: { cookie: cookie(), 'content-type': 'application/x-www-form-urlencoded', origin: base.replace(/\/$/, ''), ...headers },
+        body: new URLSearchParams(form).toString(),
+      });
+      store(res);
+      return { status: res.status, headers: res.headers, text: await res.text() };
+    },
+    async login(user, password, next) {
+      const page = await c.get(next ? `login?next=${encodeURIComponent(next)}` : 'login');
+      const pre = /name="pre" value="([^"]+)"/.exec(page.text)[1];
+      return c.post('login', { pre, user, password, next: next ?? './' });
+    },
+    async csrf(p = '') {
+      return /name="csrf" value="([^"]+)"/.exec((await c.get(p)).text)?.[1];
+    },
+  };
+  return c;
 }

@@ -49,3 +49,19 @@ article.bt-md { padding-bottom: 1rem; margin-bottom: 1rem; border-bottom: 1px so
 .bt-grid img { width: 100%; height: auto; border: 1px solid var(--bt-border, GrayText); border-radius: var(--bt-radius, 6px); }
 .bt-grid figcaption { font-size: 0.85rem; color: var(--bt-muted, GrayText); }
 .bt-deadlink { text-decoration: underline dotted; }
+/* forms, workshop, inbox */
+.bt-form { display: grid; gap: .75rem; max-width: 40rem; margin: 1rem 0; }
+.bt-form label { display: grid; gap: .25rem; font-weight: 600; }
+.bt-form input, .bt-form select, .bt-form textarea { font: inherit; padding: .5rem; min-height: 2.75rem; border: 1px solid var(--bt-border, GrayText); border-radius: var(--bt-radius, 6px); background: var(--bt-bg, Canvas); color: inherit; }
+.bt-form textarea { min-height: 8rem; resize: vertical; }
+.bt-form button, .bt-danger button, .bt-logout button { font: inherit; min-height: 2.75rem; padding: .5rem 1rem; border-radius: var(--bt-radius, 6px); border: 1px solid var(--bt-accent, ButtonBorder); background: var(--bt-accent, ButtonFace); color: var(--bt-accent-fg, ButtonText); cursor: pointer; justify-self: start; }
+.bt-logout { display: inline; margin-left: .5rem; }
+.bt-logout button { min-height: auto; padding: .1rem .5rem; background: transparent; color: inherit; }
+.bt-flash { padding: .5rem .75rem; border-left: 4px solid var(--bt-accent, Highlight); }
+.bt-new, .bt-danger { margin: 1rem 0; }
+.bt-new > summary, .bt-danger > summary { cursor: pointer; font-weight: 600; }
+.bt-thread { list-style: none; padding: 0; display: grid; gap: .75rem; }
+.bt-thread li { padding: .5rem .75rem; border-radius: var(--bt-radius, 6px); border: 1px solid var(--bt-border, GrayText); }
+.bt-thread .bt-mine { margin-left: 2rem; }
+.bt-route { font-size: .9em; opacity: .8; }
+.bt-dev { margin: 0; padding: .4rem 1rem; }
