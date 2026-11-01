@@ -122,7 +122,12 @@ test('POSTs need the session CSRF token and a same-origin Origin', async () => {
   const csrf = await c.csrf('workshop');
   assert.equal((await c.post('workshop-save', { title: 'x' })).status, 403);
   assert.equal((await c.post('workshop-save', { title: 'x', csrf: 'wrong' })).status, 403);
-  assert.equal((await c.post('workshop-save', { title: 'x', csrf }, { origin: 'https://evil.example' })).status, 403);
+  const cross = await c.post('workshop-save', { title: 'x', csrf }, { origin: 'https://evil.example' });
+  assert.equal(cross.status, 403);
+  assert.equal(cross.text, 'cross-origin request refused');
+  const opaque = await c.post('workshop-save', { title: 'x', csrf }, { origin: 'null' });
+  assert.equal(opaque.status, 403);
+  assert.equal(opaque.text, 'cross-origin request refused');
   assert.equal((await c.post('workshop-save', { title: 'x', csrf })).status, 303);
   // Another user's token does not work for this session.
   const d = client(A.base);
@@ -209,10 +214,15 @@ test('browser login sends a same-origin Origin; an Origin of null is still refus
   assert.match(page.text, /<meta name="referrer" content="same-origin">/);
   const pre = /name="pre" value="([^"]+)"/.exec(page.text)[1];
   const form = { pre, user: 'owner', password: PW.owner, next: './' };
-  // A browser sends the opaque origin "null" when the document policy is no-referrer.
+  // (a) Opaque origin. Browsers send the four characters "null" when no origin is disclosed.
   const opaque = await c.post('login', form, { origin: 'null' });
   assert.equal(opaque.status, 403);
   assert.equal(opaque.text, 'cross-origin request refused');
+  // (b) Plain cross-site Origin, with no X-Forwarded-Host.
+  const cross = await c.post('login', form, { origin: 'https://evil.example' });
+  assert.equal(cross.status, 403);
+  assert.equal(cross.text, 'cross-origin request refused');
+  // (c) is the forged X-Forwarded-Host test below.
   // Referrer-Policy: same-origin makes the browser send this page's own origin on the form POST.
   const ok = await c.post('login', form, { origin: A.base.replace(/\/$/, '') });
   assert.equal(ok.status, 303);
