@@ -1,0 +1,17 @@
+# Keep secrets, runtime data and instance configs out of the build context.
+.git
+.github
+.env
+.env.*
+data
+mirror
+instance
+instances
+instance.yaml
+node_modules
+test
+deploy
+*.log
+*.sqlite
+*.sqlite3
+*.db

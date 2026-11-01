@@ -9,14 +9,15 @@ Each step ends with tests, a security check of anything exposed, and an OK befor
    - read tools (`list_boxes`, `get_box`, `get_document`, `search`);
    - roles with visibility rules (hide boxes, paths and issues per role) and an optional role policy for the Inbox agent;
    - a plain web UI that also works in a sandboxed iframe.
-2. **Login, Workshop notes and Inbox** (built on a feature branch; awaiting review)
+2. **Login, Workshop notes and Inbox** (done)
    - individual users with argon2id, secure cookies, CSRF protection, session expiry, login rate limiting and lockout;
    - users created and reset from the CLI only; the role comes from the signed-in user;
    - Workshop: private notes and ideas per user with history (attachment table reserved for mockups and colour profiles);
    - the Inbox in the instance SQLite with statuses and role-based routing, and `bteam inbox list|show|update` for the external processing agent (it never posts anywhere itself).
    - Later: an HTTP API for the agent, and the propose/apply tools (with the assistant in step 4).
-3. **Deploy on a subdomain**
-   - docker compose, `.env` and `instance.yaml`;
+3. **Deploy on a subdomain** (recipe written; see [DEPLOY.md](DEPLOY.md))
+   - Dockerfile (non-root, read-only root filesystem, health check), docker compose example, `.env` and `instance.yaml`;
+   - `BTEAM_HOST` for the in-container bind address (default stays loopback), `bteam backup`;
    - DNS and reverse-proxy routing set up by the server administrators;
    - a security review before it goes live.
 4. **Workshop media and assistant per user**
