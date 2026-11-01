@@ -106,7 +106,8 @@ web:
   frame_ancestors: ["'self'"]        # who may embed the UI in an iframe
   secure_cookies: true               # false is only accepted when serving on 127.0.0.1 / ::1 (plain http, local testing)
   same_site: lax                     # lax or strict
-  trust_proxy: false                 # true only behind a reverse proxy that sets X-Forwarded-For / X-Forwarded-Host
+  trust_proxy: false                 # true only behind a reverse proxy that replaces X-Forwarded-For (rate limits only)
+  # public_origin: https://app.example.test  # set when Host is not the public host; Origin must match it
 
 auth:                                # all optional; these are the defaults
   session_idle: 12h                  # signed out after this long without activity

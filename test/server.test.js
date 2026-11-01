@@ -26,6 +26,7 @@ test('home page lists boxes with strict security headers and no scripts', async 
   assert.match(csp, /form-action 'self'/);
   assert.match(csp, /frame-ancestors 'self'/);
   assert.equal(r.headers.get('x-content-type-options'), 'nosniff');
+  assert.equal(r.headers.get('referrer-policy'), 'same-origin');
   assert.equal(r.headers.get('cross-origin-opener-policy'), 'same-origin');
 });
 

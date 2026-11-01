@@ -200,6 +200,74 @@ test('dev user override only applies to loopback clients and needs an existing u
   }
 });
 
+test('browser login sends a same-origin Origin; an Origin of null is still refused', async () => {
+  const A = await app();
+  const c = client(A.base);
+  const page = await c.get('login');
+  assert.equal(page.status, 200);
+  assert.equal(page.headers.get('referrer-policy'), 'same-origin');
+  assert.match(page.text, /<meta name="referrer" content="same-origin">/);
+  const pre = /name="pre" value="([^"]+)"/.exec(page.text)[1];
+  const form = { pre, user: 'owner', password: PW.owner, next: './' };
+  // A browser sends the opaque origin "null" when the document policy is no-referrer.
+  const opaque = await c.post('login', form, { origin: 'null' });
+  assert.equal(opaque.status, 403);
+  assert.equal(opaque.text, 'cross-origin request refused');
+  // Referrer-Policy: same-origin makes the browser send this page's own origin on the form POST.
+  const ok = await c.post('login', form, { origin: A.base.replace(/\/$/, '') });
+  assert.equal(ok.status, 303);
+  assert.equal(ok.headers.get('referrer-policy'), 'same-origin');
+  assert.equal(ok.headers.get('location'), './');
+  const home = await c.get('');
+  assert.equal(home.status, 200);
+  assert.equal(home.headers.get('referrer-policy'), 'same-origin');
+  assert.match(home.text, /Signed in as/);
+  assert.match(home.text, /<code>owner<\/code>/);
+});
+
+test('a forged X-Forwarded-Host plus a matching Origin is refused', async () => {
+  const inst = await makeInstance();
+  const raw = { ...sampleRawConfig(inst.src.url), web: { trust_proxy: true } };
+  const A = await app({ raw });
+  assert.equal(A.config.web.trustProxy, true);
+  const c = client(A.base);
+  const page = await c.get('login');
+  const pre = /name="pre" value="([^"]+)"/.exec(page.text)[1];
+  const forged = await c.post(
+    'login',
+    { pre, user: 'owner', password: PW.owner },
+    { origin: 'https://evil.example.test', 'x-forwarded-host': 'evil.example.test' },
+  );
+  assert.equal(forged.status, 403);
+  assert.equal(forged.text, 'cross-origin request refused');
+  // No public origin: a real browser Origin that matches Host still logs in.
+  const ok = await c.login('owner', PW.owner);
+  assert.equal(ok.status, 303);
+  assert.equal((await c.get('')).status, 200);
+});
+
+test('with web.public_origin set, Origin must match it and not X-Forwarded-Host', async () => {
+  const inst = await makeInstance();
+  const raw = { ...sampleRawConfig(inst.src.url), web: { trust_proxy: true, public_origin: 'https://app.example.test' } };
+  const A = await app({ raw });
+  assert.equal(A.config.web.publicOrigin, 'https://app.example.test');
+  const c = client(A.base);
+  const page = await c.get('login');
+  const pre = /name="pre" value="([^"]+)"/.exec(page.text)[1];
+  const form = { pre, user: 'owner', password: PW.owner };
+  const forged = await c.post('login', form, { origin: 'https://evil.example.test', 'x-forwarded-host': 'evil.example.test' });
+  assert.equal(forged.status, 403);
+  assert.equal(forged.text, 'cross-origin request refused');
+  // Matching the listen Host is not enough once a public origin is configured.
+  const viaHost = await c.post('login', form, { origin: A.base.replace(/\/$/, '') });
+  assert.equal(viaHost.status, 403);
+  const ok = await c.post('login', form, { origin: 'https://app.example.test', 'x-forwarded-host': 'evil.example.test' });
+  assert.equal(ok.status, 303);
+  const home = await c.get('');
+  assert.equal(home.status, 200);
+  assert.match(home.text, /<code>owner<\/code>/);
+});
+
 test('non-secure cookie mode uses plain cookie names without Secure', async () => {
   const inst = await makeInstance();
   const raw = { ...sampleRawConfig(inst.src.url), web: { secure_cookies: false, same_site: 'strict' } };

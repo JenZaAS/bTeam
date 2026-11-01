@@ -18,7 +18,7 @@ export function layout({ t, locale, status, boxes, title, body, currentBox = nul
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<meta name="referrer" content="no-referrer">
+<meta name="referrer" content="same-origin">
 <title>${e(title ? `${title} · ` : '')}${e(status.instance.title)}</title>
 <link rel="stylesheet" href="assets/base.css">
 <link rel="stylesheet" href="theme.css">

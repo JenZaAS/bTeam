@@ -63,7 +63,7 @@ export function createHandler({ core, auth, workshop = null, inbox = null, theme
       'Content-Type': type,
       'Content-Security-Policy': csp,
       'X-Content-Type-Options': 'nosniff',
-      'Referrer-Policy': 'no-referrer',
+      'Referrer-Policy': 'same-origin',
       'Cross-Origin-Resource-Policy': 'same-origin',
       'Cross-Origin-Opener-Policy': 'same-origin',
       'Cache-Control': 'no-store',
@@ -144,7 +144,7 @@ export function createHandler({ core, auth, workshop = null, inbox = null, theme
 
     try {
       if (isPost) {
-        if (!sameOrigin(req, web.trustProxy)) return send(res, 403, 'text/plain; charset=utf-8', 'cross-origin request refused');
+        if (!sameOrigin(req, web.publicOrigin)) return send(res, 403, 'text/plain; charset=utf-8', 'cross-origin request refused');
         let form;
         try {
           form = await readForm(req);
@@ -229,7 +229,7 @@ export function createHandler({ core, auth, workshop = null, inbox = null, theme
         'Set-Cookie': serializeCookie(preCookie, pre, { ...cookieOpts, maxAge: 3600 }),
       });
     };
-    if (!sameOrigin(req, web.trustProxy)) return send(res, 403, 'text/plain; charset=utf-8', 'cross-origin request refused');
+    if (!sameOrigin(req, web.publicOrigin)) return send(res, 403, 'text/plain; charset=utf-8', 'cross-origin request refused');
     let form;
     try {
       form = await readForm(req, 8 * 1024);

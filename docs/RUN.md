@@ -46,7 +46,7 @@ For scripts, `--password-stdin` reads the password from the first line of stdin.
 - By default session cookies are `Secure` (`__Host-` prefixed), so browsers only send them over HTTPS (browsers also accept them on `http://localhost`/`127.0.0.1`).
 - For plain-http testing on another loopback setup you can set `web.secure_cookies: false`; `serve` refuses this on a non-loopback address.
 - The bind address is `127.0.0.1` unless `--host` or the `BTEAM_HOST` env var says otherwise (`--host` wins). The container image sets `BTEAM_HOST=0.0.0.0`; see [DEPLOY.md](DEPLOY.md).
-- `serve --host 0.0.0.0` is allowed now that there is a login, but only behind an HTTPS reverse proxy. Set `web.trust_proxy: true` only if that proxy sets `X-Forwarded-For` and `X-Forwarded-Host`; otherwise rate limiting would see the proxy's address for everyone.
+- `serve --host 0.0.0.0` is allowed now that there is a login, but only behind an HTTPS reverse proxy. Set `web.trust_proxy: true` only if that proxy sets `X-Forwarded-For` and drops any client-supplied value; otherwise rate limiting would see the proxy's address for everyone. Form POSTs do not trust `X-Forwarded-Host`. Set `web.public_origin` to the external origin when `Host` is not that host.
 - Session and lockout limits are under `auth:` (see `instance.example.yaml`).
 
 ## Backup
@@ -98,6 +98,6 @@ The tests build throw-away git repositories and databases, and exercise the boxe
 
 ## Security notes
 - Every route except `login`, `healthz` and the stylesheets needs a session; the role comes from the account.
-- Only GET/HEAD and form POSTs (with a CSRF token and a same-origin check). Strict CSP (`default-src 'none'`, no scripts), `nosniff`, `no-referrer`, COOP `same-origin`.
+- Only GET/HEAD and form POSTs (with a CSRF token and a same-origin check). Strict CSP (`default-src 'none'`, no scripts), `nosniff`, `Referrer-Policy: same-origin`, COOP `same-origin`.
 - Raw HTML in Markdown (documents, Workshop notes, Inbox text) is shown as text; `javascript:`/`data:` links are dropped; only files inside a visible box can be opened.
 - See `docs/ARCHITECTURE.md` (sections 4c and 11) for session, password and rate-limit details.

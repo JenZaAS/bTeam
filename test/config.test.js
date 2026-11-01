@@ -66,6 +66,8 @@ test('auth, web, workshop and inbox settings are validated with safe defaults', 
   const c = validateConfig(base);
   assert.equal(c.web.secureCookies, true);
   assert.equal(c.web.sameSite, 'Lax');
+  assert.equal(c.web.trustProxy, false);
+  assert.equal(c.web.publicOrigin, null);
   assert.equal(c.auth.maxFailures, 5);
   assert.equal(c.auth.sessionIdleMs, 12 * 3600_000);
   assert.equal(c.inbox.ownerQuestionLabel, 'needs-owner-decision');
@@ -73,7 +75,10 @@ test('auth, web, workshop and inbox settings are validated with safe defaults', 
   assert.equal(c2.auth.sessionIdleMs, 30 * 60_000);
   assert.equal(c2.web.sameSite, 'Strict');
   assert.equal(c2.web.secureCookies, false);
-  for (const bad of [{ auth: { min_password_length: 4 } }, { auth: { session_idle: '8d' } }, { auth: { nope: 1 } }, { web: { same_site: 'none' } }, { web: { secure_cookies: 'yes' } }, { inbox: { owner_question_label: 'a\nb' } }]) {
+  const c3 = validateConfig({ ...base, web: { trust_proxy: true, public_origin: 'https://app.example.test' } });
+  assert.equal(c3.web.trustProxy, true);
+  assert.equal(c3.web.publicOrigin, 'https://app.example.test');
+  for (const bad of [{ auth: { min_password_length: 4 } }, { auth: { session_idle: '8d' } }, { auth: { nope: 1 } }, { web: { same_site: 'none' } }, { web: { secure_cookies: 'yes' } }, { web: { public_origin: 'https://app.example.test/login' } }, { web: { public_origin: 'https://user:abc@app.example.test' } }, { inbox: { owner_question_label: 'a\nb' } }]) {
     assert.throws(() => validateConfig({ ...base, ...bad }), undefined, JSON.stringify(bad));
   }
 });
