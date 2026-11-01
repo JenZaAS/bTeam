@@ -4,6 +4,15 @@ import { makeApp, client, PW } from './helpers.js';
 import { isLoopback } from '../src/server.js';
 import { themeCss } from '../src/theme.js';
 
+const hrefs = (html) => [...html.matchAll(/href="([^"]*)"/g)].map((m) => m[1]);
+function block(html, open, close) {
+  const i = html.indexOf(open);
+  assert.ok(i >= 0, open);
+  const j = html.indexOf(close, i + open.length);
+  assert.ok(j > i, close);
+  return html.slice(i, j + close.length);
+}
+
 let A, owner, designer;
 before(async () => {
   A = await makeApp({ handlerOptions: { themeCss: themeCss({ tokens: { accent: '#123456', bg: 'red;}</style>' } }) } });
@@ -17,9 +26,17 @@ after(() => A.close());
 test('home page lists boxes with strict security headers and no scripts', async () => {
   const r = await owner.get('');
   assert.equal(r.status, 200);
-  assert.match(r.text, /href="box\?id=digest"/);
-  assert.match(r.text, /href="workshop"/);
-  assert.match(r.text, /href="inbox"/);
+  const ids = ['digest', 'decisions', 'now', 'design', 'docs', 'questions', 'issues', 'source'];
+  const nav = block(r.text, '<nav', '</nav>');
+  const cards = block(r.text, '<ul class="bt-cards">', '</ul>');
+  const footer = block(r.text, '<footer', '</footer>');
+  assert.deepEqual(hrefs(nav), ['./', ...ids.map((id) => `box?id=${id}`), 'workshop', 'inbox', 'advanced']);
+  assert.deepEqual(hrefs(cards), ids.map((id) => `box?id=${id}`));
+  assert.ok(!r.text.includes('bt-type'));
+  assert.match(footer, /More/);
+  assert.match(footer, /href="advanced"/);
+  assert.ok(!footer.includes(A.mirror.commitInfo.short));
+  assert.ok(!footer.includes('Source:'));
   assert.ok(!/<script/i.test(r.text));
   const csp = r.headers.get('content-security-policy');
   assert.match(csp, /default-src 'none'/);
@@ -28,6 +45,16 @@ test('home page lists boxes with strict security headers and no scripts', async 
   assert.equal(r.headers.get('x-content-type-options'), 'nosniff');
   assert.equal(r.headers.get('referrer-policy'), 'same-origin');
   assert.equal(r.headers.get('cross-origin-opener-policy'), 'same-origin');
+});
+
+test('advanced page shows the mirror line when every box is primary', async () => {
+  const r = await owner.get('advanced');
+  assert.equal(r.status, 200);
+  const main = block(r.text, '<main', '</main>');
+  assert.match(main, /Source:/);
+  assert.match(main, new RegExp(A.mirror.commitInfo.short));
+  assert.ok(!main.includes('box?id='));
+  assert.ok(!main.includes('Nothing here yet.'));
 });
 
 test('served HTML pages do not set a no-referrer policy', async () => {
@@ -68,6 +95,8 @@ test('documents, files, images and search work; unknown things 404', async () =>
 test('JSON tools use the signed-in user\'s role', async () => {
   const o = JSON.parse((await owner.get('api/get_box?id=issues')).text);
   const d = JSON.parse((await designer.get('api/get_box?id=issues')).text);
+  assert.equal(o.box.nav, 'primary');
+  assert.equal(o.box.order, null);
   assert.deepEqual(o.issues.map((i) => i.number), [1, 2, 3, 4, 5]);
   assert.deepEqual(d.issues.map((i) => i.number), [1, 3]);
   assert.equal((await designer.get('doc?path=docs%2Fsecret-ops.md')).status, 404);
@@ -77,16 +106,19 @@ test('JSON tools use the signed-in user\'s role', async () => {
 
 test('nothing but login, health and stylesheets is reachable without a session', async () => {
   const anon = client(A.base);
-  for (const p of ['', 'box?id=digest', 'doc?path=docs%2Fguide.md', 'raw?path=shots%2F2026-01-02%2Fhome-390.png', 'search?q=mirror', 'workshop', 'inbox', 'inbox-item?id=1']) {
+  for (const p of ['', 'box?id=digest', 'doc?path=docs%2Fguide.md', 'raw?path=shots%2F2026-01-02%2Fhome-390.png', 'search?q=mirror', 'workshop', 'inbox', 'inbox-item?id=1', 'advanced']) {
     const r = await anon.get(p);
     assert.equal(r.status, 303, p);
     assert.match(r.headers.get('location'), /^login/, p);
   }
   assert.equal((await anon.get('box?id=digest')).headers.get('location'), 'login?next=box%3Fid%3Ddigest');
+  assert.equal((await anon.get('advanced')).headers.get('location'), 'login?next=advanced');
   assert.equal((await anon.get('api/status')).status, 401);
   const login = await anon.get('login');
   assert.equal(login.status, 200);
   assert.ok(!login.text.includes('box?id='), 'login page must not list boxes');
+  assert.ok(!login.text.includes('More'));
+  assert.ok(!login.text.includes('not been mirrored'));
   assert.equal((await anon.get('healthz')).status, 200);
   assert.equal((await anon.get('assets/base.css')).status, 200);
   const css = (await anon.get('theme.css')).text;
@@ -111,6 +143,17 @@ test('language follows Accept-Language and ?lang', async () => {
   assert.match(nb.text, /<html lang="nb">/);
   assert.match(nb.text, /Oversikt/);
   assert.match((await owner.get('?lang=en')).text, /Overview/);
+});
+
+test('api/status returns the mirror commit for the signed-in owner', async () => {
+  const s = JSON.parse((await owner.get('api/status')).text);
+  assert.equal(s.source.commit.short, A.mirror.commitInfo.short);
+});
+
+test('base stylesheet marks More and drops the type label', async () => {
+  const css = (await owner.get('assets/base.css')).text;
+  assert.match(css, /bt-nav-more/);
+  assert.ok(!css.includes('bt-type'));
 });
 
 test('only loopback hosts count as safe binds', () => {

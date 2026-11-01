@@ -269,13 +269,13 @@ export function createCore({ config, mirror, issues = null }) {
     },
 
     list_boxes(viewer) {
-      return visibleBoxes(viewer).map((b) => ({ id: b.id, type: b.type, title: b.title, description: b.description }));
+      return visibleBoxes(viewer).map((b) => ({ id: b.id, type: b.type, title: b.title, description: b.description, nav: b.nav, order: b.order }));
     },
 
     async get_box(viewer, id, params = {}) {
       const box = getBoxOrThrow(viewer, id);
       const data = await builders[box.type](viewer, box, params);
-      return { box: { id: box.id, type: box.type, title: box.title, description: box.description }, ...data };
+      return { box: { id: box.id, type: box.type, title: box.title, description: box.description, nav: box.nav, order: box.order }, ...data };
     },
 
     async get_document(viewer, p) {

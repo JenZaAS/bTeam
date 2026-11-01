@@ -17,16 +17,21 @@ source:
   token_env: BTEAM_SOURCE_TOKEN      # optional read-only token for private https repos; value in .env
 
 # Boxes are generic and read-only. Titles may be a string or {locale: text}.
+# nav is "primary" (default) or "advanced". order is an integer, lower first; omit it to sort after every set order. Equal orders keep the order in this file.
+# About 7 primary boxes is a guideline for authors, not a limit the app enforces. Workshop and Inbox are not boxes, do not count toward that, and have no order; they render after the primary boxes and before More.
 boxes:
   - id: digest
     type: digest
     title: { en: Digest, nb: Siste nytt }
+    nav: primary
+    order: 40
     pattern: "digest/*.md"           # written by an external agent into the SOURCE repo; README.md is skipped
     latest: 1                        # how many of the newest files to show in full
 
   - id: now
     type: documents
     title: Now
+    nav: advanced
     paths: ["PLAN.md"]
     sections:                        # show only sections whose heading matches, newest (last in file) first
       heading: "^Status\\b"
@@ -35,6 +40,8 @@ boxes:
 
   - id: decisions
     type: decisions
+    nav: primary
+    order: 20
     paths: ["docs/decisions/*.md"]   # date/status from front matter or "Date:"/"Status:" lines
     front_matter:                    # optional filters
       status: [accepted, superseded]
@@ -44,6 +51,8 @@ boxes:
 
   - id: gallery
     type: gallery
+    nav: primary
+    order: 60
     root: "screenshots/"
     group_by_folder: date            # date (newest first), folder (A-Z) or none
     filename_pattern: "^(?:(?<variant>[a-z]+)-)?(?<page>[a-z0-9-]+)-(?<width>\\d+)\\.png$"   # named groups become filters
@@ -51,23 +60,28 @@ boxes:
 
   - id: documents
     type: documents
+    nav: advanced
     paths: ["docs/**/*.md", "README.md"]
     features: [sections, toc, search, cross-links]
 
   - id: questions
     type: open-questions
+    nav: primary                 # open questions stay in the main navigation
+    order: 80
     issues:
       labels: [needs-owner-decision]
     paths: ["docs/open-questions.md"]
 
   - id: issues
     type: issues
+    nav: advanced
     issues:
       labels: [bug, design]          # any of these; [] = all
       state: open                    # open, closed or all
 
   - id: source
     type: source-browser
+    nav: advanced
     include: ["**/*"]
     exclude: ["node_modules/**", "**/*.lock", "**/.env*"]
 
