@@ -7,8 +7,10 @@ import { openInstance, openState } from '../src/instance.js';
 import { INBOX_STATUSES } from '../src/inbox.js';
 import { loadConfig, ConfigError } from '../src/config.js';
 import { createViewer } from '../src/visibility.js';
-import { createHandler, startServer, isLoopback } from '../src/server.js';
+import { createHandler, startServer } from '../src/server.js';
 import { loadThemeCss } from '../src/theme.js';
+import { resolveServeOptions, ServeOptionsError } from '../src/serve-options.js';
+import { backupDb, BackupError } from '../src/backup.js';
 
 const USAGE = `Usage: bteam <command> [options]
 
@@ -17,6 +19,7 @@ Commands:
   sync                  mirror the source repository and refresh issues once
   tool <name> [k=v...]  run a read tool (status, list_boxes, get_box, get_document, search) and print JSON
   serve                 sync, then serve the web UI (login required) with scheduled refresh
+  backup [--out FILE]   consistent copy of the instance database (default <data>/backups/), safe while serving
 
   user add <id> [--role R]      create a user; asks for the password (or --password-stdin)
   user reset <id>               set a new password; signs the user out everywhere
@@ -34,7 +37,7 @@ Options:
   --config <file>   instance config (default: $BTEAM_CONFIG or ./instance.yaml)
   --data <dir>      data directory for the mirror and database (default: $BTEAM_DATA_DIR or ./data)
   --role <role>     tool: view as this role (default: viewer.default_role)
-  --host <host>     serve: bind address (default: 127.0.0.1)
+  --host <host>     serve: bind address (default: $BTEAM_HOST or 127.0.0.1)
   --port <port>     serve: port (default: $PORT or 8080)
   --dev-user <id>   serve, development only: requests from this machine act as this existing
                     user without logging in. Only allowed when bound to a loopback address.
@@ -145,6 +148,7 @@ async function main() {
       port: { type: 'string' },
       'dev-user': { type: 'string' },
       'password-stdin': { type: 'boolean' },
+      out: { type: 'string' },
       status: { type: 'string' },
       reply: { type: 'string' },
       'issue-url': { type: 'string' },
@@ -177,6 +181,18 @@ async function main() {
     return;
   }
 
+  if (cmd === 'backup') {
+    const config = loadConfig(configPath);
+    const state = openState(config, dataDir);
+    try {
+      const r = await backupDb(state.db, { dataDir, instanceId: config.instance.id, out: values.out ?? null });
+      console.log(`backup written: ${r.file} (integrity ok, ${r.users} user(s))`);
+    } finally {
+      state.db.close();
+    }
+    return;
+  }
+
   if (cmd === 'user' || cmd === 'inbox') {
     const config = loadConfig(configPath);
     const state = openState(config, dataDir);
@@ -189,6 +205,8 @@ async function main() {
     return;
   }
 
+  // Check the serve options before touching the config, data or network.
+  const serveOpts = cmd === 'serve' ? resolveServeOptions(values, process.env) : null;
   const inst = openInstance({ configPath, dataDir });
 
   if (cmd === 'sync') {
@@ -217,11 +235,8 @@ async function main() {
   }
 
   if (cmd === 'serve') {
-    const host = values.host ?? '127.0.0.1';
-    const port = Number(values.port ?? process.env.PORT ?? 8080);
-    const devUser = values['dev-user'] ?? null;
-    if (!isLoopback(host) && devUser) throw new Error('--dev-user is only allowed with a loopback --host (127.0.0.1 or ::1)');
-    if (!isLoopback(host) && !inst.config.web.secureCookies) throw new Error(`refusing to bind to ${host} with web.secure_cookies: false; this is only allowed on a loopback address`);
+    const { host, port, devUser, public: isPublic } = serveOpts;
+    if (isPublic && !inst.config.web.secureCookies) throw new Error(`refusing to bind to ${host} with web.secure_cookies: false; this is only allowed on a loopback address`);
     if (values.role) console.warn('[bteam] --role is ignored by serve: the role comes from the signed-in user');
     const state = openState(inst.config, dataDir);
     if (devUser && !state.auth.getUser(devUser)) throw new Error(`--dev-user "${devUser}" does not exist; create it with "bteam user add"`);
@@ -234,6 +249,7 @@ async function main() {
     inst.schedule();
     const handler = createHandler({ core: inst.core, auth: state.auth, workshop: state.workshop, inbox: state.inbox, themeCss: loadThemeCss(inst.config.instance.theme), devUser });
     await startServer({ handler, host, port });
+    if (isPublic) console.warn(`[bteam] bound to ${host}: serve only behind an HTTPS reverse proxy${inst.config.web.trustProxy ? '' : ' (web.trust_proxy is false: rate limits will see the proxy address)'}`);
     if (devUser) console.warn(`[bteam] DEVELOPMENT: requests from this machine act as "${devUser}" without login`);
     console.log(`[bteam] serving "${inst.config.instance.title}" on http://${host.includes(':') ? `[${host}]` : host}:${port}/ (login required)`);
     return;
@@ -243,6 +259,6 @@ async function main() {
 }
 
 main().catch((err) => {
-  console.error(err instanceof ConfigError ? err.message : `bteam: ${err.message}`);
+  console.error(err instanceof ConfigError || err instanceof ServeOptionsError || err instanceof BackupError ? err.message : `bteam: ${err.message}`);
   process.exit(1);
 });

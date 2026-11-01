@@ -45,8 +45,16 @@ For scripts, `--password-stdin` reads the password from the first line of stdin.
 ## Cookies, HTTPS and proxies
 - By default session cookies are `Secure` (`__Host-` prefixed), so browsers only send them over HTTPS (browsers also accept them on `http://localhost`/`127.0.0.1`).
 - For plain-http testing on another loopback setup you can set `web.secure_cookies: false`; `serve` refuses this on a non-loopback address.
+- The bind address is `127.0.0.1` unless `--host` or the `BTEAM_HOST` env var says otherwise (`--host` wins). The container image sets `BTEAM_HOST=0.0.0.0`; see [DEPLOY.md](DEPLOY.md).
 - `serve --host 0.0.0.0` is allowed now that there is a login, but only behind an HTTPS reverse proxy. Set `web.trust_proxy: true` only if that proxy sets `X-Forwarded-For` and `X-Forwarded-Host`; otherwise rate limiting would see the proxy's address for everyone.
 - Session and lockout limits are under `auth:` (see `instance.example.yaml`).
+
+## Backup
+```sh
+node bin/bteam.js backup --config instance.yaml --data ./data            # -> data/backups/<id>-<UTC time>.sqlite
+node bin/bteam.js backup --out /safe/place/x.sqlite --config instance.yaml --data ./data
+```
+A consistent, integrity-checked copy (mode 600), safe while `serve` is running. It never overwrites an existing file.
 
 ## Development override
 `serve --dev-user <id>` makes requests from the same machine act as an existing user without logging in, to speed up UI work. It is refused unless `--host` is a loopback address, it ignores non-loopback clients, and every page shows a warning banner. Do not use it on a server.

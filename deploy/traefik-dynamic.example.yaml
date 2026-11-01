@@ -1,0 +1,34 @@
+# Example Traefik file-provider route for one bTeam instance (placeholders only).
+# Put a copy in the proxy's dynamic configuration directory; Traefik reloads it without a restart.
+# The container must be on the same Docker network as Traefik (see compose.example.yaml).
+http:
+  routers:
+    bteam-example-http:
+      rule: Host(`team.example.com`)
+      entryPoints: [web]
+      middlewares: [bteam-example-https]
+      service: bteam-example
+    bteam-example:
+      rule: Host(`team.example.com`)
+      entryPoints: [websecure]
+      middlewares: [bteam-example-headers]
+      service: bteam-example
+      tls:
+        certResolver: letsencrypt
+  middlewares:
+    bteam-example-https:
+      redirectScheme:
+        scheme: https
+        permanent: true
+    bteam-example-headers:
+      headers:
+        stsSeconds: 31536000
+        stsIncludeSubdomains: false
+        customResponseHeaders:
+          X-Robots-Tag: "noindex, nofollow"
+  services:
+    bteam-example:
+      loadBalancer:
+        passHostHeader: true
+        servers:
+          - url: "http://bteam-example:8080"   # container name on the shared network

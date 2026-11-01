@@ -1,0 +1,59 @@
+# Example Docker Compose service for one bTeam instance behind a reverse proxy (Traefik shown).
+# Copy to a host directory outside the repository (e.g. /srv/bteam/<instance>/compose.yaml),
+# next to that instance's instance.yaml and .env. Replace every "example" value. See docs/DEPLOY.md.
+#
+#   docker compose -f compose.yaml build      # or build the image elsewhere and set image:
+#   docker compose -f compose.yaml up -d
+
+name: bteam-example
+
+services:
+  bteam:
+    build:
+      context: /path/to/bteam/repo         # a clean checkout of the bTeam commit to deploy
+      dockerfile: Dockerfile
+    image: bteam:example                   # tag per deployed commit, e.g. bteam:<short sha>
+    container_name: bteam-example
+    restart: unless-stopped
+    read_only: true
+    tmpfs:
+      - /tmp:size=64m,mode=1777
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    pids_limit: 128
+    mem_limit: 512m                        # the first clone of a large repository needs headroom
+    cpus: 0.5
+    env_file: .env                         # BTEAM_SOURCE_TOKEN, BTEAM_ISSUES_TOKEN (read-only); mode 600, never in git
+    environment:
+      BTEAM_HOST: 0.0.0.0                  # inside the container only; the default outside a container is 127.0.0.1
+      PORT: "8080"
+      NODE_OPTIONS: --max-old-space-size=256
+    volumes:
+      - bteam-data:/data                   # mirror + <instance id>.sqlite (users, sessions, Workshop, Inbox); back this up
+      - ./instance.yaml:/config/instance.yaml:ro
+      # - ./theme.json:/config/theme.json:ro   # if instance.theme is set (path relative to instance.yaml)
+    ports:
+      - "127.0.0.1:8080:8080"              # host loopback only, for local checks; pick a free port. Never 0.0.0.0.
+    networks:
+      - default
+      - proxy
+    # Option B (Traefik Docker provider). Option A is a file-provider route, see traefik-dynamic.example.yaml.
+    # labels:
+    #   traefik.enable: "true"
+    #   traefik.docker.network: proxy-network-name
+    #   traefik.http.routers.bteam-example.rule: Host(`team.example.com`)
+    #   traefik.http.routers.bteam-example.entrypoints: websecure
+    #   traefik.http.routers.bteam-example.tls.certresolver: letsencrypt
+    #   traefik.http.routers.bteam-example.middlewares: bteam-example-headers
+    #   traefik.http.middlewares.bteam-example-headers.headers.stsSeconds: "31536000"
+    #   traefik.http.middlewares.bteam-example-headers.headers.customResponseHeaders.X-Robots-Tag: "noindex, nofollow"
+    #   traefik.http.services.bteam-example.loadbalancer.server.port: "8080"
+
+volumes:
+  bteam-data:
+
+networks:
+  default:
+  proxy:
+    external: true
+    name: proxy-network-name               # the network the reverse proxy is attached to
