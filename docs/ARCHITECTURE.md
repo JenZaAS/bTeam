@@ -47,19 +47,25 @@ Boxes are filled by **rules in the instance config**: path globs, filename patte
 | `issues` | Open issues filtered by label and state. |
 | `source-browser` | A file tree and file viewer over the mirror, with include/exclude globs. |
 
+Each box may set **`nav`** (`primary`, default, or `advanced`) and **`order`** (integer; unset values sort after all set values, ties keep config order). These keys affect only how the web UI groups and orders links; they do not change what the box contains.
+
 ## 4a. Roles and visibility
 - The instance config defines **roles**. Each user account (in the instance database) has one role; `users:` in the config may only suggest a default role for `bteam user add`, never credentials.
 - A role can only **hide** content, never add it: box ids, path globs, issue label globs and issue title patterns.
-- Hiding applies everywhere: box lists, documents, raw files and images, links (they become dead links) and search.
+- Hiding applies everywhere: box lists, documents, raw files and images, links (they become dead links) and search. The **Advanced** page and direct box URLs obey the same rules: hidden boxes never appear in navigation or on Advanced, and `box?id=` for a hidden box returns not found.
 - A file is reachable only if it is inside at least one box the role can see and not hidden for that role (deny by default).
 - A role may carry a **policy** for the Inbox agent, e.g. which kinds of contribution may be adopted directly (`auto_accept_eligible`) and where everything else goes (`route_other_to`). bTeam stamps each submission with the resulting route; the agent decides and acts.
 
-## 4b. Implementation (step 1)
+## 4b. Primary navigation and Advanced
+- The signed-in **primary nav** shows Overview, primary boxes (sorted by `order`), Workshop and Inbox when enabled, then **More** (always last). Boxes with `nav: advanced` appear only on the Advanced page, not in the nav bar or on the home overview cards.
+- **More** opens the Advanced page: a simple list of advanced boxes plus source mirror metadata (commit and sync time). Source errors stay on Overview.
+
+## 4c. Implementation (step 1)
 - Node.js (22+ since step 2), plain `node:http`, server-rendered HTML with no client scripts. Dependencies: `yaml` (ISC), `marked` (MIT), `picomatch` (MIT).
 - The mirror is a bare repository (`git init --bare` + `fetch` of the configured branch); files are read with `git ls-tree`/`git cat-file`, never checked out.
 - Read tools: `status`, `list_boxes`, `get_box`, `get_document`, `search` (CLI `bteam tool …` and `api/<tool>`).
 
-## 4c. Implementation (step 2)
+## 4d. Implementation (step 2)
 - State lives in `<data>/<instance id>.sqlite` (`better-sqlite3`, MIT; file mode 0600, directory 0700). Schema migrations run on open (`PRAGMA user_version`).
 - Passwords: argon2id via `@node-rs/argon2` (MIT), m=19456 KiB, t=2, p=1. Unknown users are checked against a dummy hash so timing does not reveal which accounts exist.
 - Sessions: 32 random bytes in a cookie (`__Host-bteam_session`: HttpOnly, Secure, SameSite=Lax by default, Path=/); only the SHA-256 of the token is stored. A new session is issued on every login and the old one is deleted. Idle (12 h) and absolute (7 d) expiry. Password reset, role change and disable end all of the user's sessions.

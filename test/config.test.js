@@ -1,6 +1,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { validateConfig, ConfigError } from '../src/config.js';
+import { validateConfig, ConfigError, loadConfig } from '../src/config.js';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { sampleRawConfig } from './helpers.js';
 
 const base = () => sampleRawConfig('https://git.example.com/org/repo.git');
@@ -81,4 +83,34 @@ test('auth, web, workshop and inbox settings are validated with safe defaults', 
   for (const bad of [{ auth: { min_password_length: 4 } }, { auth: { session_idle: '8d' } }, { auth: { nope: 1 } }, { web: { same_site: 'none' } }, { web: { secure_cookies: 'yes' } }, { web: { public_origin: 'https://app.example.test/login' } }, { web: { public_origin: 'https://user:abc@app.example.test' } }, { inbox: { owner_question_label: 'a\nb' } }]) {
     assert.throws(() => validateConfig({ ...base, ...bad }), undefined, JSON.stringify(bad));
   }
+});
+
+test('box nav and order defaults and validation', () => {
+  const raw = base();
+  const c = validateConfig(raw);
+  for (const b of c.boxes) {
+    assert.equal(b.nav, 'primary');
+    assert.equal(b.order, null);
+  }
+  const ok = base();
+  ok.boxes[0].nav = 'advanced';
+  ok.boxes[0].order = -3;
+  validateConfig(ok);
+  const badNav = base();
+  badNav.boxes[0].nav = 'sidebar';
+  assert.throws(() => validateConfig(badNav), /nav must be "primary" or "advanced"/);
+  const badOrder = base();
+  badOrder.boxes[0].order = 1.5;
+  assert.throws(() => validateConfig(badOrder), /order must be a safe integer/);
+  const many = base();
+  while (many.boxes.length < 9) {
+    many.boxes.push({ id: `extra-${many.boxes.length}`, type: 'digest', pattern: 'digest/*.md' });
+  }
+  assert.equal(validateConfig(many).boxes.length, 9);
+});
+
+test('instance.example.yaml validates', () => {
+  const root = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
+  const c = loadConfig(path.join(root, 'instance.example.yaml'));
+  assert.ok(c.boxes.some((b) => b.id === 'now' && b.nav === 'advanced'));
 });

@@ -14,7 +14,7 @@ export const BOX_TYPES = {
   issues: ['issues'],
   'source-browser': ['include', 'exclude'],
 };
-const COMMON_BOX_KEYS = ['id', 'type', 'title', 'description', 'visible_to'];
+const COMMON_BOX_KEYS = ['id', 'type', 'title', 'description', 'visible_to', 'nav', 'order'];
 const TOP_LEVEL_KEYS = [
   'instance', 'source', 'boxes', 'issue_source', 'links', 'roles', 'users', 'viewer', 'web',
   'auth', 'workshop', 'inbox', 'assistant',
@@ -247,7 +247,17 @@ export function validateConfig(raw, { baseDir = process.cwd() } = {}) {
       unknownKeys(b, [...COMMON_BOX_KEYS, ...allowed], `${where} (${b.type})`);
       const title = b.title ?? b.id;
       if (!(typeof title === 'string' || (isObj(title) && Object.values(title).every((t) => typeof t === 'string')))) err(`${where}.title must be a string or a {locale: text} mapping`);
-      const box = { id: b.id, type: b.type, title, description: b.description ?? '', visibleTo: strList(b.visible_to, `${where}.visible_to`) };
+      let nav = 'primary';
+      if (b.nav !== undefined) {
+        if (b.nav !== 'primary' && b.nav !== 'advanced') err(`${where}.nav must be "primary" or "advanced"`);
+        else nav = b.nav;
+      }
+      let order = null;
+      if (b.order !== undefined) {
+        if (!Number.isSafeInteger(b.order)) err(`${where}.order must be a safe integer`);
+        else order = b.order;
+      }
+      const box = { id: b.id, type: b.type, title, description: b.description ?? '', visibleTo: strList(b.visible_to, `${where}.visible_to`), nav, order };
       for (const r of box.visibleTo) if (!roles[r]) err(`${where}.visible_to: unknown role "${r}"`);
 
       switch (b.type) {

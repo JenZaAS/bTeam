@@ -20,6 +20,8 @@ test('home page lists boxes with strict security headers and no scripts', async 
   assert.match(r.text, /href="box\?id=digest"/);
   assert.match(r.text, /href="workshop"/);
   assert.match(r.text, /href="inbox"/);
+  assert.match(r.text, /href="advanced"/);
+  assert.ok(!/bt-type/.test(r.text));
   assert.ok(!/<script/i.test(r.text));
   const csp = r.headers.get('content-security-policy');
   assert.match(csp, /default-src 'none'/);
@@ -75,9 +77,33 @@ test('JSON tools use the signed-in user\'s role', async () => {
   assert.match((await designer.get('')).text, /<code>designer<\/code>/);
 });
 
+test('nav More link, footer without sync metadata, and Advanced page', async () => {
+  const home = await owner.get('');
+  assert.match(home.text, /class="bt-nav-more"/);
+  assert.match(home.text, /footer[^]*href="advanced"/);
+  assert.ok(!/<footer[^>]*>[^<]*<code>[0-9a-f]{7,}<\/code>/i.test(home.text));
+  assert.ok(!/footer[^]*synced/i.test(home.text));
+  const adv = await owner.get('advanced');
+  assert.equal(adv.status, 200);
+  assert.match(adv.text, /Source:/);
+  assert.ok(!adv.text.includes('<ul class="bt-list">'));
+  assert.match(adv.text, /class="bt-nav-more"[^>]*>[\s\S]*?aria-current="page"/);
+  assert.match(adv.text, /href="\.\/"[^>]*>Overview<\/a>/);
+  assert.ok(!/href="\.\/"[^>]*aria-current="page"/.test(adv.text));
+});
+
+test('Advanced requires login; POST is not supported', async () => {
+  const anon = client(A.base);
+  const r = await anon.get('advanced');
+  assert.equal(r.status, 303);
+  assert.match(r.headers.get('location'), /^login/);
+  const csrf = await owner.csrf('');
+  assert.equal((await owner.post('advanced', { csrf })).status, 404);
+});
+
 test('nothing but login, health and stylesheets is reachable without a session', async () => {
   const anon = client(A.base);
-  for (const p of ['', 'box?id=digest', 'doc?path=docs%2Fguide.md', 'raw?path=shots%2F2026-01-02%2Fhome-390.png', 'search?q=mirror', 'workshop', 'inbox', 'inbox-item?id=1']) {
+  for (const p of ['', 'box?id=digest', 'doc?path=docs%2Fguide.md', 'raw?path=shots%2F2026-01-02%2Fhome-390.png', 'search?q=mirror', 'workshop', 'inbox', 'inbox-item?id=1', 'advanced']) {
     const r = await anon.get(p);
     assert.equal(r.status, 303, p);
     assert.match(r.headers.get('location'), /^login/, p);

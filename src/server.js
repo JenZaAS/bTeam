@@ -7,7 +7,7 @@ import { fileURLToPath } from 'node:url';
 import { NotFound } from './core.js';
 import { strings, pickLocale } from './i18n.js';
 import { createViewer } from './visibility.js';
-import { layout, homeView, boxView, documentView, fileView, searchView, notFoundView } from './views.js';
+import { layout, homeView, boxView, documentView, fileView, searchView, notFoundView, advancedView } from './views.js';
 import { loginView, workshopListView, workshopItemView, inboxListView, inboxItemView } from './views-app.js';
 import { parseCookies, serializeCookie, readForm, BodyError, clientAddress, isLoopbackAddress, safeNext, sameOrigin } from './http.js';
 import { randomToken, safeEqual } from './auth.js';
@@ -19,6 +19,32 @@ import { localized } from './config.js';
 const BASE_CSS = fs.readFileSync(fileURLToPath(new URL('./assets/base.css', import.meta.url)), 'utf8');
 const PUBLIC_PATHS = new Set(['/login', '/healthz', '/assets/base.css', '/theme.css']);
 const FLASH = { saved: 'saved', sent: 'sent', deleted: 'deleted' };
+
+/** Stable sort for nav and home: numeric order ascending, null last, ties keep config order. */
+function sortBoxesForRender(boxes) {
+  return boxes
+    .map((box, index) => ({ box, index }))
+    .sort((a, b) => {
+      const ao = a.box.order;
+      const bo = b.box.order;
+      const aHas = ao !== null && ao !== undefined;
+      const bHas = bo !== null && bo !== undefined;
+      if (aHas && bHas) {
+        if (ao !== bo) return ao - bo;
+        return a.index - b.index;
+      }
+      if (aHas && !bHas) return -1;
+      if (!aHas && bHas) return 1;
+      return a.index - b.index;
+    })
+    .map(({ box }) => box);
+}
+
+function advancedSectionForBoxes(boxIds, allBoxes) {
+  if (!boxIds?.length) return null;
+  const byId = new Map(allBoxes.map((b) => [b.id, b]));
+  return boxIds.some((id) => byId.get(id)?.nav === 'advanced') ? 'advanced' : null;
+}
 
 export function isLoopback(host) {
   return host === '127.0.0.1' || host === '::1' || host === 'localhost';
@@ -137,9 +163,12 @@ export function createHandler({ core, auth, workshop = null, inbox = null, theme
     const viewer = viewerFor(who.role);
     const user = { id: who.userId, role: who.role, csrf: who.csrf, dev: who.dev, workshop: workshopOn, inbox: inboxOn };
     const status = core.status(viewer);
-    const boxes = core.list_boxes(viewer);
+    const listed = core.list_boxes(viewer);
+    const sorted = sortBoxesForRender(listed);
+    const primary = sorted.filter((b) => b.nav !== 'advanced');
+    const advanced = sorted.filter((b) => b.nav === 'advanced');
     const page = (title, body, { httpStatus = 200, ...extra } = {}) =>
-      send(res, httpStatus, 'text/html; charset=utf-8', layout({ ...extra, t, locale, status, boxes, title, body, user, flash: t[FLASH[params.ok]] ?? null }));
+      send(res, httpStatus, 'text/html; charset=utf-8', layout({ ...extra, t, locale, status, boxes: primary, title, body, user, flash: t[FLASH[params.ok]] ?? null }));
     const notFound = () => page('', notFoundView({ t }), { httpStatus: 404 });
 
     try {
@@ -158,20 +187,25 @@ export function createHandler({ core, auth, workshop = null, inbox = null, theme
 
       switch (path) {
         case '/':
-          return page('', homeView({ t, locale, boxes, status }), { currentBox: '' });
+          return page('', homeView({ t, locale, boxes: primary, status }), { currentBox: '' });
+        case '/advanced':
+          return page(t.advanced, advancedView({ t, locale, boxes: advanced, status }), { section: 'advanced' });
         case '/box': {
           const data = await core.get_box(viewer, params.id ?? '', params);
           const v = boxView({ t, locale, data, params });
-          return page(v.title, v.html, { currentBox: data.box.id });
+          const extra = data.box.nav === 'advanced' ? { section: 'advanced' } : {};
+          return page(v.title, v.html, { currentBox: data.box.id, ...extra });
         }
         case '/doc': {
           const doc = await core.get_document(viewer, params.path ?? '');
           const suggest = inboxOn ? `<p class="bt-suggest"><a href="inbox?ref=${encodeURIComponent(`doc:${doc.path}`)}">${e(t.sendToInbox)}</a></p>` : '';
-          return page(doc.title, documentView({ t, doc }) + suggest, { currentBox: doc.boxes[0] ?? null });
+          const section = advancedSectionForBoxes(doc.boxes, listed);
+          return page(doc.title, documentView({ t, doc }) + suggest, { currentBox: doc.boxes[0] ?? null, ...(section ? { section } : {}) });
         }
         case '/file': {
           const file = await core.get_file(viewer, params.path ?? '');
-          return page(file.path, fileView({ t, file }));
+          const section = advancedSectionForBoxes(file.boxes, listed);
+          return page(file.path, fileView({ t, file }), section ? { section } : {});
         }
         case '/raw': {
           const raw = await core.read_raw(viewer, params.path ?? '');

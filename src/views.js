@@ -9,10 +9,6 @@ export function layout({ t, locale, status, boxes, title, body, currentBox = nul
   const nav = boxes
     .map((b) => `<li><a href="box?id=${q(b.id)}"${b.id === currentBox ? ' aria-current="page"' : ''}>${e(localized(b.title, locale))}</a></li>`)
     .join('');
-  const c = status.source.commit;
-  const src = c
-    ? `${e(t.sourceCommit)}: <code>${e(c.short)}</code> (${e(String(c.date).slice(0, 16).replace('T', ' '))})${status.source.lastSync ? ` · ${e(t.syncedAt)} ${e(status.source.lastSync.slice(0, 16).replace('T', ' '))} UTC` : ''}`
-    : e(t.notSynced);
   return `<!doctype html>
 <html lang="${e(locale)}">
 <head>
@@ -31,17 +27,17 @@ export function layout({ t, locale, status, boxes, title, body, currentBox = nul
     <button type="submit">${e(t.search)}</button>
   </form>` : ''}
 </header>
-${user ? `<nav class="bt-nav" aria-label="${e(t.home)}"><ul><li><a href="./"${currentBox === '' ? ' aria-current="page"' : ''}>${e(t.home)}</a></li>${nav}${
+${user ? `<nav class="bt-nav" aria-label="${e(t.mainNav)}"><ul><li><a href="./"${currentBox === '' ? ' aria-current="page"' : ''}>${e(t.home)}</a></li>${nav}${
     user.workshop ? `<li class="bt-nav-app"><a href="workshop"${section === 'workshop' ? ' aria-current="page"' : ''}>${e(t.workshop)}</a></li>` : ''
-  }${user.inbox ? `<li class="bt-nav-app"><a href="inbox"${section === 'inbox' ? ' aria-current="page"' : ''}>${e(t.inbox)}</a></li>` : ''}</ul></nav>` : ''}
+  }${user.inbox ? `<li class="bt-nav-app"><a href="inbox"${section === 'inbox' ? ' aria-current="page"' : ''}>${e(t.inbox)}</a></li>` : ''}<li class="bt-nav-more"><a href="advanced"${section === 'advanced' ? ' aria-current="page"' : ''}>${e(t.more)}</a></li></ul></nav>` : ''}
 ${user?.dev ? `<p class="bt-warn bt-dev">${e(t.devOverride)}</p>` : ''}
 <main class="bt-main">
 ${flash ? `<p class="bt-flash" role="status">${e(flash)}</p>` : ''}
 ${body}
 </main>
-<footer class="bt-footer"><span>${user ? src : ''}</span>${
+<footer class="bt-footer">${
     user
-      ? `<span>${e(t.signedInAs)} <code>${e(user.id)}</code> (${e(t.role)}: <code>${e(user.role)}</code>)${
+      ? `<span><a href="advanced">${e(t.more)}</a></span><span>${e(t.signedInAs)} <code>${e(user.id)}</code> (${e(t.role)}: <code>${e(user.role)}</code>)${
           user.dev ? '' : ` <form class="bt-logout" action="logout" method="post"><input type="hidden" name="csrf" value="${e(user.csrf)}"><button type="submit">${e(t.logout)}</button></form>`
         }</span>`
       : ''
@@ -72,7 +68,7 @@ export function homeView({ t, locale, boxes, status }) {
     .map(
       (b) => `<li class="bt-card"><a href="box?id=${q(b.id)}"><strong>${e(localized(b.title, locale))}</strong></a>${
         b.description ? `<p>${e(localized(b.description, locale))}</p>` : ''
-      }<span class="bt-type">${e(b.type)}</span></li>`,
+      }</li>`,
     )
     .join('');
   const links = status.links.length
@@ -80,6 +76,23 @@ export function homeView({ t, locale, boxes, status }) {
     : '';
   const err = status.source.error ? `<p class="bt-warn">${e(status.source.error)}</p>` : '';
   return `<h1>${e(t.home)}</h1>${err}<ul class="bt-cards">${cards}</ul>${links}`;
+}
+
+function sourceMeta(t, status) {
+  const c = status.source.commit;
+  return c
+    ? `${e(t.sourceCommit)}: <code>${e(c.short)}</code> (${e(String(c.date).slice(0, 16).replace('T', ' '))})${status.source.lastSync ? ` · ${e(t.syncedAt)} ${e(status.source.lastSync.slice(0, 16).replace('T', ' '))} UTC` : ''}`
+    : e(t.notSynced);
+}
+
+export function advancedView({ t, locale, boxes, status }) {
+  const list = boxes
+    .map(
+      (b) =>
+        `<li><a href="box?id=${q(b.id)}">${e(localized(b.title, locale))}</a>${b.description ? `<p>${e(localized(b.description, locale))}</p>` : ''}</li>`,
+    )
+    .join('');
+  return `<h1>${e(t.advanced)}</h1>${list ? `<ul class="bt-list">${list}</ul>` : ''}<p class="bt-source-meta">${sourceMeta(t, status)}</p>`;
 }
 
 export function boxView({ t, locale, data, params }) {

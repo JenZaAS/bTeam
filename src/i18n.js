@@ -2,6 +2,9 @@
 const STRINGS = {
   en: {
     home: 'Overview',
+    mainNav: 'Main navigation',
+    more: 'More',
+    advanced: 'Advanced',
     search: 'Search',
     searchPlaceholder: 'Search documents and issues',
     noResults: 'No results.',
@@ -73,6 +76,9 @@ const STRINGS = {
   },
   nb: {
     home: 'Oversikt',
+    mainNav: 'Hovednavigasjon',
+    more: 'Mer',
+    advanced: 'Avansert',
     search: 'Søk',
     searchPlaceholder: 'Søk i dokumenter og saker',
     noResults: 'Ingen treff.',

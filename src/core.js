@@ -269,13 +269,13 @@ export function createCore({ config, mirror, issues = null }) {
     },
 
     list_boxes(viewer) {
-      return visibleBoxes(viewer).map((b) => ({ id: b.id, type: b.type, title: b.title, description: b.description }));
+      return visibleBoxes(viewer).map((b) => ({ id: b.id, type: b.type, title: b.title, description: b.description, nav: b.nav, order: b.order }));
     },
 
     async get_box(viewer, id, params = {}) {
       const box = getBoxOrThrow(viewer, id);
       const data = await builders[box.type](viewer, box, params);
-      return { box: { id: box.id, type: box.type, title: box.title, description: box.description }, ...data };
+      return { box: { id: box.id, type: box.type, title: box.title, description: box.description, nav: box.nav, order: box.order }, ...data };
     },
 
     async get_document(viewer, p) {
@@ -298,12 +298,12 @@ export function createCore({ config, mirror, issues = null }) {
       if (!safe || !reachable(viewer, safe)) throw new NotFound(String(p));
       const info = await mirror.stat(safe);
       if (!info) throw new NotFound(safe);
-      if (isMarkdown(safe)) return { path: safe, kind: 'markdown', size: info.size };
-      if (imageType(safe)) return { path: safe, kind: 'image', size: info.size };
-      if (info.size > MAX_RENDER_BYTES) return { path: safe, kind: 'binary', size: info.size };
+      if (isMarkdown(safe)) return { path: safe, kind: 'markdown', size: info.size, boxes: visibleBoxes(viewer).filter((b) => matchers.get(b.id)(safe)).map((b) => b.id) };
+      if (imageType(safe)) return { path: safe, kind: 'image', size: info.size, boxes: visibleBoxes(viewer).filter((b) => matchers.get(b.id)(safe)).map((b) => b.id) };
+      if (info.size > MAX_RENDER_BYTES) return { path: safe, kind: 'binary', size: info.size, boxes: visibleBoxes(viewer).filter((b) => matchers.get(b.id)(safe)).map((b) => b.id) };
       const buf = await mirror.read(safe);
-      if (!looksLikeText(buf)) return { path: safe, kind: 'binary', size: info.size };
-      return { path: safe, kind: 'text', size: info.size, text: buf.toString('utf8') };
+      if (!looksLikeText(buf)) return { path: safe, kind: 'binary', size: info.size, boxes: visibleBoxes(viewer).filter((b) => matchers.get(b.id)(safe)).map((b) => b.id) };
+      return { path: safe, kind: 'text', size: info.size, text: buf.toString('utf8'), boxes: visibleBoxes(viewer).filter((b) => matchers.get(b.id)(safe)).map((b) => b.id) };
     },
 
     /** Raw bytes for images (and plain text for anything else). */

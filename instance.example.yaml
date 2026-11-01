@@ -17,6 +17,8 @@ source:
   token_env: BTEAM_SOURCE_TOKEN      # optional read-only token for private https repos; value in .env
 
 # Boxes are generic and read-only. Titles may be a string or {locale: text}.
+# Optional per box: nav (primary | advanced; default primary) and order (integer; unset sorts last).
+# Keep roughly seven items in the primary nav; Workshop, Inbox and More follow automatically.
 boxes:
   - id: digest
     type: digest
@@ -27,6 +29,7 @@ boxes:
   - id: now
     type: documents
     title: Now
+    nav: advanced
     paths: ["PLAN.md"]
     sections:                        # show only sections whose heading matches, newest (last in file) first
       heading: "^Status\\b"
@@ -51,6 +54,7 @@ boxes:
 
   - id: documents
     type: documents
+    nav: advanced
     paths: ["docs/**/*.md", "README.md"]
     features: [sections, toc, search, cross-links]
 
@@ -62,12 +66,14 @@ boxes:
 
   - id: issues
     type: issues
+    nav: advanced
     issues:
       labels: [bug, design]          # any of these; [] = all
       state: open                    # open, closed or all
 
   - id: source
     type: source-browser
+    nav: advanced
     include: ["**/*"]
     exclude: ["node_modules/**", "**/*.lock", "**/.env*"]
 
