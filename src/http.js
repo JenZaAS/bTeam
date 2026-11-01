@@ -68,14 +68,21 @@ export function safeNext(next) {
   return s;
 }
 
-/** Same-origin check for POSTs: if the browser sends Origin, it must match the Host. */
-export function sameOrigin(req, trustProxy) {
+/**
+ * Same-origin check for POSTs.
+ * A missing Origin is allowed (non-browser clients). The literal "null" is refused.
+ * When publicOrigin is set, Origin must equal it (scheme, host and port).
+ * Otherwise the Origin host must equal the Host header.
+ * X-Forwarded-Host is never used: a client can set it to match a forged Origin.
+ * web.trust_proxy does not apply here; it only selects the client address.
+ */
+export function sameOrigin(req, publicOrigin = null) {
   const origin = req.headers.origin;
   if (!origin || origin === 'null') return origin !== 'null';
-  let host = req.headers.host;
-  if (trustProxy && req.headers['x-forwarded-host']) host = String(req.headers['x-forwarded-host']).split(',')[0].trim();
   try {
-    return new URL(origin).host === host;
+    const got = new URL(origin);
+    if (publicOrigin) return got.origin === publicOrigin;
+    return got.host === req.headers.host;
   } catch {
     return false;
   }

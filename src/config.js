@@ -326,11 +326,11 @@ export function validateConfig(raw, { baseDir = process.cwd() } = {}) {
   }
 
   // web
-  const web = { frameAncestors: ["'self'"], secureCookies: true, sameSite: 'Lax', trustProxy: false };
+  const web = { frameAncestors: ["'self'"], secureCookies: true, sameSite: 'Lax', trustProxy: false, publicOrigin: null };
   if (raw.web !== undefined) {
     if (!isObj(raw.web)) err('web must be a mapping');
     else {
-      unknownKeys(raw.web, ['frame_ancestors', 'secure_cookies', 'same_site', 'trust_proxy'], 'web');
+      unknownKeys(raw.web, ['frame_ancestors', 'secure_cookies', 'same_site', 'trust_proxy', 'public_origin'], 'web');
       if (raw.web.frame_ancestors !== undefined) {
         const fa = strList(raw.web.frame_ancestors, 'web.frame_ancestors');
         if (fa.some((s) => !/^('self'|'none'|https:\/\/[\w.*:-]+)$/.test(s))) err("web.frame_ancestors entries must be 'self', 'none' or https:// origins");
@@ -348,6 +348,20 @@ export function validateConfig(raw, { baseDir = process.cwd() } = {}) {
       if (raw.web.trust_proxy !== undefined) {
         if (typeof raw.web.trust_proxy !== 'boolean') err('web.trust_proxy must be true or false');
         else web.trustProxy = raw.web.trust_proxy;
+      }
+      if (raw.web.public_origin != null) {
+        const s = raw.web.public_origin;
+        let parsed = null;
+        if (typeof s === 'string') {
+          try {
+            parsed = new URL(s);
+          } catch {
+            parsed = null;
+          }
+        }
+        const schemeOk = parsed && (parsed.protocol === 'http:' || parsed.protocol === 'https:');
+        if (!schemeOk || parsed.origin !== s) err('web.public_origin must be an absolute http(s) origin with no path, query, credentials or default port');
+        else web.publicOrigin = parsed.origin;
       }
     }
   }

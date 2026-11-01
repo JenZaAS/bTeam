@@ -31,6 +31,7 @@ The container runs with a read-only root filesystem: everything it writes goes t
    web:
      secure_cookies: true   # default
      trust_proxy: true      # only when the proxy replaces X-Forwarded-For (see 5.3)
+     public_origin: https://app.example.test  # Origin must match this; see 5.3
    source:
      refresh: 1h
    issue_source:
@@ -83,10 +84,12 @@ The example service is hardened: `read_only`, `cap_drop: ALL`, `no-new-privilege
 - **Docker labels**: see the commented `labels:` block in the Compose example. Traefik must watch Docker, and `traefik.docker.network` must name the shared network.
 
 ### 5.2 Headers
-bTeam sets its own CSP (`default-src 'none'`, no scripts, `frame-ancestors` from the config), `X-Content-Type-Options`, `Referrer-Policy: no-referrer`, COOP/CORP and `Cache-Control: no-store`. At the proxy, add HSTS and `X-Robots-Tag: noindex, nofollow`, and redirect HTTP to HTTPS. Do not add a second CSP at the proxy, because it would combine with bTeam's. A basic-auth layer is optional; bTeam has its own login on every page except `/login`, `/healthz` and the two stylesheets.
+bTeam sets its own CSP (`default-src 'none'`, no scripts, `frame-ancestors` from the config), `X-Content-Type-Options`, `Referrer-Policy: same-origin`, COOP/CORP and `Cache-Control: no-store`. At the proxy, add HSTS and `X-Robots-Tag: noindex, nofollow`, and redirect HTTP to HTTPS. Do not add a second CSP at the proxy, because it would combine with bTeam's. A basic-auth layer is optional; bTeam has its own login on every page except `/login`, `/healthz` and the two stylesheets.
 
 ### 5.3 Client addresses (`web.trust_proxy`)
 With `trust_proxy: true`, bTeam takes the client address for login rate limits from the **first** `X-Forwarded-For` entry. That is only correct if the proxy discards client-sent `X-Forwarded-*` headers. Traefik does this by default for entry points with no `forwardedHeaders.trustedIPs` or `forwardedHeaders.insecure`. Check the entry point, and test it as in section 9. The container must only be reachable through the proxy; other containers on the same network could otherwise send their own header.
+
+The same-origin check on form POSTs does not use `trust_proxy` or `X-Forwarded-Host`. A client can send both `X-Forwarded-Host` and a matching `Origin`. When `web.public_origin` is set, `Origin` must equal that origin (scheme, host and port). When it is unset, the `Origin` host must equal the `Host` header. Set `public_origin` if the proxy leaves `Host` as an internal name; otherwise a browser's `Origin` will not match and login is refused.
 
 ## 6. First-run users
 

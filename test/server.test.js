@@ -26,7 +26,23 @@ test('home page lists boxes with strict security headers and no scripts', async 
   assert.match(csp, /form-action 'self'/);
   assert.match(csp, /frame-ancestors 'self'/);
   assert.equal(r.headers.get('x-content-type-options'), 'nosniff');
+  assert.equal(r.headers.get('referrer-policy'), 'same-origin');
   assert.equal(r.headers.get('cross-origin-opener-policy'), 'same-origin');
+});
+
+test('served HTML pages do not set a no-referrer policy', async () => {
+  const login = await client(A.base).get('login');
+  const home = await owner.get('');
+  const missing = await owner.get('nowhere');
+  assert.equal(login.status, 200);
+  assert.equal(home.status, 200);
+  assert.equal(missing.status, 404);
+  for (const r of [login, home, missing]) {
+    assert.equal(r.headers.get('referrer-policy'), 'same-origin');
+    assert.match(r.text, /<meta name="referrer" content="same-origin">/);
+    assert.ok(!r.text.includes('no-referrer'));
+    assert.ok(!/referrerpolicy\s*=/i.test(r.text));
+  }
 });
 
 test('every box page renders behind login', async () => {
