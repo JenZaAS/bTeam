@@ -56,7 +56,7 @@ ${user?.dev ? `<p class="bt-warn bt-dev">${e(t.devOverride)}</p>` : ''}
 ${flash ? `<p class="bt-flash" role="status">${e(flash)}</p>` : ''}
 ${body}
 </main>
-<footer class="bt-footer"><span>${user ? `<a class="bt-nav-more" href="advanced">${e(t.more)}</a>` : ''}</span>${
+<footer class="bt-footer">${
     user
       ? `<span>${e(t.signedInAs)} <code>${e(user.id)}</code> (${e(t.role)}: <code>${e(user.role)}</code>)${
           user.dev ? '' : ` <form class="bt-logout" action="logout" method="post"><input type="hidden" name="csrf" value="${e(user.csrf)}"><button type="submit">${e(t.logout)}</button></form>`
@@ -115,7 +115,7 @@ export function advancedView({ t, locale, advancedBoxes, status }) {
     })
     .join('');
   const list = advancedBoxes.length ? `<ul>${items}</ul>` : '';
-  return `<h1>${e(t.advanced)}</h1>${list}<p class="bt-source bt-source-meta">${sourceLine(t, status)}</p>`;
+  return `<h1>${e(t.more)}</h1>${list}<p class="bt-source bt-source-meta">${sourceLine(t, status)}</p>`;
 }
 
 export function boxView({ t, locale, data, params }) {

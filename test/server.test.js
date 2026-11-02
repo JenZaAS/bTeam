@@ -34,8 +34,8 @@ test('home page lists boxes with strict security headers and no scripts', async 
   assert.deepEqual(hrefs(nav), ['./', ...ids.map((id) => `box?id=${id}`), 'workshop', 'inbox', 'advanced']);
   assert.deepEqual(hrefs(cards), ids.map((id) => `box?id=${id}`));
   assert.ok(!r.text.includes('bt-type'));
-  assert.match(footer, /More/);
-  assert.match(footer, /href="advanced"/);
+  assert.ok(!footer.includes('bt-nav-more'));
+  assert.ok(!/href="advanced"/.test(footer));
   assert.ok(!footer.includes(A.mirror.commitInfo.short));
   assert.ok(!footer.includes('Source:'));
   assert.ok(!/<script/i.test(r.text));
@@ -51,7 +51,12 @@ test('home page lists boxes with strict security headers and no scripts', async 
 test('advanced page shows the mirror line when every box is primary', async () => {
   const r = await owner.get('advanced');
   assert.equal(r.status, 200);
+  assert.match(r.text, /<title>More ·/);
   const main = block(r.text, '<main', '</main>');
+  assert.match(main, /<h1>More<\/h1>/);
+  const footer = block(r.text, '<footer', '</footer>');
+  assert.ok(!footer.includes('bt-nav-more'));
+  assert.ok(!/href="advanced"/.test(footer));
   assert.match(main, /Source:/);
   assert.match(main, new RegExp(A.mirror.commitInfo.short));
   assert.ok(!main.includes('box?id='));
@@ -155,7 +160,6 @@ test('base stylesheet marks More and drops the type label', async () => {
   const css = (await owner.get('assets/base.css')).text;
   assert.match(css, /bt-nav-more/);
   assert.match(css, /a\.bt-advanced-link\s*\{[^}]*display:\s*inline-flex[^}]*min-height:\s*44px[^}]*padding:/);
-  assert.match(css, /\.bt-footer a\.bt-nav-more\s*\{[^}]*min-height:\s*44px/);
   assert.ok(!css.includes('bt-type'));
 });
 

@@ -301,8 +301,8 @@ test('a shared path highlights the primary box; an advanced-only path highlights
 
 test('advanced page uses the Norwegian strings', async () => {
   const html = (await owner.get('advanced?lang=nb')).text;
-  assert.match(html, /<h1>Avansert<\/h1>/);
-  assert.match(html, /href="advanced">Mer</);
+  assert.match(html, /<h1>Mer<\/h1>/);
+  assert.match(html, /href="advanced"[^>]*>Mer</);
   assert.match(html, /<nav class="bt-nav" aria-label="Hovednavigasjon">/);
   assert.match(html, />Oversikt</);
 });

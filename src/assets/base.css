@@ -26,7 +26,6 @@ code, pre { font-family: var(--bt-font-mono, ui-monospace, monospace); font-size
 .bt-path, .bt-count, .bt-date { color: var(--bt-muted, GrayText); font-size: 0.85rem; }
 .bt-nav-more a,
 a.bt-nav-more { color: var(--bt-muted, GrayText); }
-.bt-footer a.bt-nav-more { display: inline-block; min-height: 44px; line-height: 44px; }
 a.bt-advanced-link { display: inline-flex; align-items: center; min-height: 44px; padding: 0.25rem 0; }
 .bt-source,
 .bt-source-meta { color: var(--bt-muted, GrayText); font-size: 0.85rem; }
