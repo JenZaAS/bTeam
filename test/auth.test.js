@@ -2,7 +2,7 @@ import { test, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { makeApp, makeInstance, client, PW } from './helpers.js';
 import { createHandler, startServer } from '../src/server.js';
-import { checkPasswordPolicy, sha256 } from '../src/auth.js';
+import { checkPasswordPolicy, randomToken, sha256 } from '../src/auth.js';
 import { sampleRawConfig } from './helpers.js';
 
 const apps = [];
@@ -12,6 +12,19 @@ const app = async (o) => {
   return a;
 };
 after(() => apps.forEach((a) => a.close()));
+
+// Same shape as randomToken(24): 24 bytes of unpadded base64url.
+const PRE_RE = /^[A-Za-z0-9_-]{32}$/;
+const alertText = (html) => /role="alert">([^<]+)</.exec(html)[1];
+
+function issuedPre(page) {
+  const form = /name="pre" value="([^"]+)"/.exec(page.text);
+  assert.ok(form);
+  const set = page.headers.getSetCookie().find((s) => s.startsWith('__Host-bteam_pre='));
+  assert.ok(set);
+  const cookie = decodeURIComponent(set.slice('__Host-bteam_pre='.length).split(';')[0]);
+  return { form: form[1], cookie };
+}
 
 test('passwords are stored as argon2id hashes; no plaintext anywhere in the database', async () => {
   const A = await app();
@@ -287,4 +300,111 @@ test('non-secure cookie mode uses plain cookie names without Secure', async () =
   assert.ok(set);
   assert.ok(!/Secure/.test(set));
   assert.match(set, /SameSite=Strict/);
+});
+
+test('a valid pre-login cookie is reused on the next login page', async () => {
+  const A = await app();
+  const crafted = `${'Ab3-_'.repeat(6)}Cd`;
+  for (const token of [randomToken(24), crafted]) {
+    assert.match(token, PRE_RE);
+    const c = client(A.base);
+    c.jar.set('__Host-bteam_pre', token);
+    const got = issuedPre(await c.get('login'));
+    assert.equal(got.form, token);
+    assert.equal(got.cookie, token);
+  }
+});
+
+test('a pre-login cookie with the wrong shape is replaced', async () => {
+  const A = await app();
+  const cases = [
+    ['wrong charset', `${'Ab3-_'.repeat(6)}C+`],
+    ['too long', 'A'.repeat(64)],
+    ['too short', `${'Ab3-_'.repeat(6)}C`],
+  ];
+  for (const [name, value] of cases) {
+    assert.equal(PRE_RE.test(value), false, name);
+    const c = client(A.base);
+    c.jar.set('__Host-bteam_pre', value);
+    const got = issuedPre(await c.get('login'));
+    assert.equal(got.form, got.cookie, name);
+    assert.match(got.form, PRE_RE, name);
+    assert.notEqual(got.form, value, name);
+  }
+});
+
+test('a second login page keeps the first form able to sign in', async () => {
+  const A = await app();
+  const c = client(A.base);
+  const first = issuedPre(await c.get('login'));
+  assert.equal(first.form, first.cookie);
+  assert.match(first.form, PRE_RE);
+  const second = issuedPre(await c.get('login'));
+  assert.equal(second.form, first.form);
+  assert.equal(second.cookie, first.cookie);
+  const r = await c.post('login', { pre: first.form, user: 'owner', password: PW.owner, next: './' });
+  assert.equal(r.status, 303);
+  assert.equal(r.headers.get('location'), './');
+  const home = await c.get('');
+  assert.equal(home.status, 200);
+  assert.match(home.text, /<code>owner<\/code>/);
+});
+
+test('the per-account login limit locks at the configured threshold', async () => {
+  const A = await app();
+  const max = A.config.auth.maxFailures;
+  const acctCount = (id) => A.state.db.prepare('SELECT COUNT(*) AS n FROM rate_events WHERE key = ?').get(`acct:${id}`).n;
+
+  for (let i = 0; i < max - 1; i++) assert.equal((await client(A.base).login('designer', `wrong-${i}-password`)).status, 401);
+  assert.equal(acctCount('designer'), max - 1);
+  const allowed = await client(A.base).login('designer', PW.designer);
+  assert.equal(allowed.status, 303, 'just under the account threshold');
+  assert.equal(allowed.headers.get('location'), './');
+
+  let sample;
+  for (let i = 0; i < max; i++) {
+    const r = await client(A.base).login('owner', `wrong-${i}-password`);
+    assert.equal(r.status, 401);
+    sample ??= alertText(r.text);
+  }
+  assert.equal(acctCount('owner'), max);
+  const locked = await client(A.base).login('owner', PW.owner);
+  assert.equal(locked.status, 401);
+  assert.equal(alertText(locked.text), sample);
+  assert.ok(!locked.headers.getSetCookie().some((s) => s.includes('bteam_session=')));
+  const again = await A.state.auth.login('owner', PW.owner, 'other-client');
+  assert.equal(again.ok, false);
+  assert.equal(again.reason, 'account-locked');
+});
+
+test('the per-IP login limit locks at the configured threshold', async () => {
+  const A = await app();
+  const max = A.config.auth.maxAttemptsPerClient;
+  const ipCount = () => A.state.db.prepare("SELECT COUNT(*) AS n FROM rate_events WHERE key LIKE 'ip:%'").get().n;
+
+  let sample;
+  for (let i = 0; i < max - 1; i++) {
+    const r = await client(A.base).login(`user-${i}`, 'wrong-password-xx');
+    assert.equal(r.status, 401);
+    sample ??= alertText(r.text);
+  }
+  assert.equal(ipCount(), max - 1);
+  const allowed = await client(A.base).login('owner', PW.owner);
+  assert.equal(allowed.status, 303, 'just under the client threshold');
+  assert.equal(allowed.headers.get('location'), './');
+  // A successful sign-in does not record a client event, so one more failure reaches the threshold.
+  assert.equal(ipCount(), max - 1);
+  assert.equal((await client(A.base).login('user-extra', 'wrong-password-xx')).status, 401);
+  assert.equal(ipCount(), max);
+
+  const locked = await client(A.base).login('designer', PW.designer);
+  assert.equal(locked.status, 401);
+  assert.equal(alertText(locked.text), sample);
+  assert.ok(!locked.headers.getSetCookie().some((s) => s.includes('bteam_session=')));
+  const ipKey = A.state.db.prepare("SELECT key FROM rate_events WHERE key LIKE 'ip:%' GROUP BY key").all();
+  assert.equal(ipKey.length, 1);
+  const same = await A.state.auth.login('designer', PW.designer, ipKey[0].key.slice(3));
+  assert.equal(same.ok, false);
+  assert.equal(same.reason, 'client-limited');
+  assert.equal((await A.state.auth.login('designer', PW.designer, 'other-client')).ok, true);
 });

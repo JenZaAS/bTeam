@@ -19,6 +19,8 @@ import { localized } from './config.js';
 const BASE_CSS = fs.readFileSync(fileURLToPath(new URL('./assets/base.css', import.meta.url)), 'utf8');
 const PUBLIC_PATHS = new Set(['/login', '/healthz', '/assets/base.css', '/theme.css']);
 const FLASH = { saved: 'saved', sent: 'sent', deleted: 'deleted' };
+// randomToken(24) is 24 bytes of unpadded base64url, which is exactly 32 characters.
+const PRE_TOKEN_RE = /^[A-Za-z0-9_-]{32}$/;
 
 export function isLoopback(host) {
   return host === '127.0.0.1' || host === '::1' || host === 'localhost';
@@ -116,7 +118,8 @@ export function createHandler({ core, auth, workshop = null, inbox = null, theme
     if (path === '/login') {
       if (who && !isPost) return redirect(res, safeNext(params.next));
       if (!isPost) {
-        const pre = randomToken(24);
+        const prior = cookies[preCookie];
+        const pre = PRE_TOKEN_RE.test(prior ?? '') ? prior : randomToken(24);
         return send(
           res,
           200,
