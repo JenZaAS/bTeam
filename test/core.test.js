@@ -14,7 +14,9 @@ test('mirror lists files from the configured branch', async () => {
 });
 
 test('list_boxes returns the configured boxes', () => {
-  assert.deepEqual(I.core.list_boxes(I.owner).map((b) => b.id), ['digest', 'decisions', 'now', 'design', 'docs', 'questions', 'issues', 'source']);
+  const boxes = I.core.list_boxes(I.owner);
+  assert.deepEqual(boxes.map((b) => b.id), ['digest', 'decisions', 'now', 'design', 'docs', 'questions', 'issues', 'source']);
+  assert.ok(boxes.every((b) => b.nav === 'primary' && b.order === null));
 });
 
 test('digest shows the newest file rendered and older ones listed', async () => {

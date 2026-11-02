@@ -7,7 +7,7 @@ import { fileURLToPath } from 'node:url';
 import { NotFound } from './core.js';
 import { strings, pickLocale } from './i18n.js';
 import { createViewer } from './visibility.js';
-import { layout, homeView, boxView, documentView, fileView, searchView, notFoundView } from './views.js';
+import { layout, homeView, advancedView, boxView, documentView, fileView, searchView, notFoundView, sortNavBoxes, splitNavBoxes } from './views.js';
 import { loginView, workshopListView, workshopItemView, inboxListView, inboxItemView } from './views-app.js';
 import { parseCookies, serializeCookie, readForm, BodyError, clientAddress, isLoopbackAddress, safeNext, sameOrigin } from './http.js';
 import { randomToken, safeEqual } from './auth.js';
@@ -121,7 +121,7 @@ export function createHandler({ core, auth, workshop = null, inbox = null, theme
           res,
           200,
           'text/html; charset=utf-8',
-          layout({ t, locale, status: publicStatus, boxes: [], title: t.login, body: loginView({ t, next: safeNext(params.next), pre, error: params.expired ? t.sessionExpired : false }) }),
+          layout({ t, locale, status: publicStatus, primaryBoxes: [], title: t.login, body: loginView({ t, next: safeNext(params.next), pre, error: params.expired ? t.sessionExpired : false }) }),
           { 'Set-Cookie': serializeCookie(preCookie, pre, { ...cookieOpts, maxAge: 3600 }) },
         );
       }
@@ -138,9 +138,18 @@ export function createHandler({ core, auth, workshop = null, inbox = null, theme
     const user = { id: who.userId, role: who.role, csrf: who.csrf, dev: who.dev, workshop: workshopOn, inbox: inboxOn };
     const status = core.status(viewer);
     const boxes = core.list_boxes(viewer);
+    const { primary, advanced } = splitNavBoxes(sortNavBoxes(boxes));
     const page = (title, body, { httpStatus = 200, ...extra } = {}) =>
-      send(res, httpStatus, 'text/html; charset=utf-8', layout({ ...extra, t, locale, status, boxes, title, body, user, flash: t[FLASH[params.ok]] ?? null }));
+      send(res, httpStatus, 'text/html; charset=utf-8', layout({ ...extra, t, locale, status, title, body, user, flash: t[FLASH[params.ok]] ?? null, primaryBoxes: primary }));
     const notFound = () => page('', notFoundView({ t }), { httpStatus: 404 });
+    // ids are config-order matches on this visible list, never raw config.
+    // More is current only when every match is advanced. Otherwise the first primary match is current.
+    const docNav = (ids) => {
+      const matched = boxes.filter((b) => ids.includes(b.id));
+      const primaryMatch = matched.find((b) => b.nav !== 'advanced');
+      const advancedOnly = matched.length > 0 && matched.every((b) => b.nav === 'advanced');
+      return { currentBox: primaryMatch ? primaryMatch.id : (ids[0] ?? null), ...(advancedOnly ? { section: 'advanced' } : {}) };
+    };
 
     try {
       if (isPost) {
@@ -158,16 +167,18 @@ export function createHandler({ core, auth, workshop = null, inbox = null, theme
 
       switch (path) {
         case '/':
-          return page('', homeView({ t, locale, boxes, status }), { currentBox: '' });
+          return page('', homeView({ t, locale, primaryBoxes: primary, status }), { currentBox: '' });
+        case '/advanced':
+          return page(t.advanced, advancedView({ t, locale, advancedBoxes: advanced, status }), { section: 'advanced' });
         case '/box': {
           const data = await core.get_box(viewer, params.id ?? '', params);
           const v = boxView({ t, locale, data, params });
-          return page(v.title, v.html, { currentBox: data.box.id });
+          return page(v.title, v.html, { currentBox: data.box.id, ...(data.box.nav === 'advanced' ? { section: 'advanced' } : {}) });
         }
         case '/doc': {
           const doc = await core.get_document(viewer, params.path ?? '');
           const suggest = inboxOn ? `<p class="bt-suggest"><a href="inbox?ref=${encodeURIComponent(`doc:${doc.path}`)}">${e(t.sendToInbox)}</a></p>` : '';
-          return page(doc.title, documentView({ t, doc }) + suggest, { currentBox: doc.boxes[0] ?? null });
+          return page(doc.title, documentView({ t, doc }) + suggest, docNav(doc.boxes));
         }
         case '/file': {
           const file = await core.get_file(viewer, params.path ?? '');
@@ -225,7 +236,7 @@ export function createHandler({ core, auth, workshop = null, inbox = null, theme
   async function handleLogin(req, res, t, locale, cookies, publicStatus) {
     const fail = (status, error) => {
       const pre = randomToken(24);
-      return send(res, status, 'text/html; charset=utf-8', layout({ t, locale, status: publicStatus, boxes: [], title: t.login, body: loginView({ t, error, pre, next: './' }) }), {
+      return send(res, status, 'text/html; charset=utf-8', layout({ t, locale, status: publicStatus, primaryBoxes: [], title: t.login, body: loginView({ t, error, pre, next: './' }) }), {
         'Set-Cookie': serializeCookie(preCookie, pre, { ...cookieOpts, maxAge: 3600 }),
       });
     };
