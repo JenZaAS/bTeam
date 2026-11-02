@@ -2,6 +2,7 @@
 const STRINGS = {
   en: {
     home: 'Overview',
+    mainNav: 'Main navigation',
     more: 'More',
     advanced: 'Advanced',
     search: 'Search',
@@ -75,6 +76,7 @@ const STRINGS = {
   },
   nb: {
     home: 'Oversikt',
+    mainNav: 'Hovednavigasjon',
     more: 'Mer',
     advanced: 'Avansert',
     search: 'Søk',

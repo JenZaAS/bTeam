@@ -142,6 +142,14 @@ export function createHandler({ core, auth, workshop = null, inbox = null, theme
     const page = (title, body, { httpStatus = 200, ...extra } = {}) =>
       send(res, httpStatus, 'text/html; charset=utf-8', layout({ ...extra, t, locale, status, title, body, user, flash: t[FLASH[params.ok]] ?? null, primaryBoxes: primary }));
     const notFound = () => page('', notFoundView({ t }), { httpStatus: 404 });
+    // ids are config-order matches on this visible list, never raw config.
+    // More is current only when every match is advanced. Otherwise the first primary match is current.
+    const docNav = (ids) => {
+      const matched = boxes.filter((b) => ids.includes(b.id));
+      const primaryMatch = matched.find((b) => b.nav !== 'advanced');
+      const advancedOnly = matched.length > 0 && matched.every((b) => b.nav === 'advanced');
+      return { currentBox: primaryMatch ? primaryMatch.id : (ids[0] ?? null), ...(advancedOnly ? { section: 'advanced' } : {}) };
+    };
 
     try {
       if (isPost) {
@@ -170,9 +178,7 @@ export function createHandler({ core, auth, workshop = null, inbox = null, theme
         case '/doc': {
           const doc = await core.get_document(viewer, params.path ?? '');
           const suggest = inboxOn ? `<p class="bt-suggest"><a href="inbox?ref=${encodeURIComponent(`doc:${doc.path}`)}">${e(t.sendToInbox)}</a></p>` : '';
-          // doc.boxes is config order. Current state follows the first match on this visible list, never raw config.
-          const first = boxes.find((b) => b.id === doc.boxes[0]);
-          return page(doc.title, documentView({ t, doc }) + suggest, { currentBox: doc.boxes[0] ?? null, ...(first?.nav === 'advanced' ? { section: 'advanced' } : {}) });
+          return page(doc.title, documentView({ t, doc }) + suggest, docNav(doc.boxes));
         }
         case '/file': {
           const file = await core.get_file(viewer, params.path ?? '');

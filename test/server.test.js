@@ -30,6 +30,7 @@ test('home page lists boxes with strict security headers and no scripts', async 
   const nav = block(r.text, '<nav', '</nav>');
   const cards = block(r.text, '<ul class="bt-cards">', '</ul>');
   const footer = block(r.text, '<footer', '</footer>');
+  assert.match(nav, /aria-label="Main navigation"/);
   assert.deepEqual(hrefs(nav), ['./', ...ids.map((id) => `box?id=${id}`), 'workshop', 'inbox', 'advanced']);
   assert.deepEqual(hrefs(cards), ids.map((id) => `box?id=${id}`));
   assert.ok(!r.text.includes('bt-type'));
@@ -153,6 +154,8 @@ test('api/status returns the mirror commit for the signed-in owner', async () =>
 test('base stylesheet marks More and drops the type label', async () => {
   const css = (await owner.get('assets/base.css')).text;
   assert.match(css, /bt-nav-more/);
+  assert.match(css, /a\.bt-advanced-link\s*\{[^}]*display:\s*inline-flex[^}]*min-height:\s*44px[^}]*padding:/);
+  assert.match(css, /\.bt-footer a\.bt-nav-more\s*\{[^}]*min-height:\s*44px/);
   assert.ok(!css.includes('bt-type'));
 });
 

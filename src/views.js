@@ -48,7 +48,7 @@ export function layout({ t, locale, status, primaryBoxes, title, body, currentBo
     <button type="submit">${e(t.search)}</button>
   </form>` : ''}
 </header>
-${user ? `<nav class="bt-nav" aria-label="${e(t.home)}"><ul><li><a href="./"${currentBox === '' ? ' aria-current="page"' : ''}>${e(t.home)}</a></li>${nav}${
+${user ? `<nav class="bt-nav" aria-label="${e(t.mainNav)}"><ul><li><a href="./"${currentBox === '' ? ' aria-current="page"' : ''}>${e(t.home)}</a></li>${nav}${
     user.workshop ? `<li class="bt-nav-app"><a href="workshop"${section === 'workshop' ? ' aria-current="page"' : ''}>${e(t.workshop)}</a></li>` : ''
   }${user.inbox ? `<li class="bt-nav-app"><a href="inbox"${section === 'inbox' ? ' aria-current="page"' : ''}>${e(t.inbox)}</a></li>` : ''}<li class="bt-nav-more"><a href="advanced"${section === 'advanced' ? ' aria-current="page"' : ''}>${e(t.more)}</a></li></ul></nav>` : ''}
 ${user?.dev ? `<p class="bt-warn bt-dev">${e(t.devOverride)}</p>` : ''}
@@ -111,11 +111,11 @@ export function advancedView({ t, locale, advancedBoxes, status }) {
   const items = advancedBoxes
     .map((b) => {
       const desc = localized(b.description, locale);
-      return `<li><a href="box?id=${q(b.id)}">${e(localized(b.title, locale))}</a>${desc ? `<p>${e(desc)}</p>` : ''}</li>`;
+      return `<li><a class="bt-advanced-link" href="box?id=${q(b.id)}">${e(localized(b.title, locale))}</a>${desc ? `<p>${e(desc)}</p>` : ''}</li>`;
     })
     .join('');
   const list = advancedBoxes.length ? `<ul>${items}</ul>` : '';
-  return `<h1>${e(t.advanced)}</h1>${list}<p class="bt-source">${sourceLine(t, status)}</p>`;
+  return `<h1>${e(t.advanced)}</h1>${list}<p class="bt-source bt-source-meta">${sourceLine(t, status)}</p>`;
 }
 
 export function boxView({ t, locale, data, params }) {

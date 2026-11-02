@@ -153,7 +153,23 @@ test('layout omits the nav when logged out and lists only primary boxes plus Mor
     user: { id: 'owner', role: 'owner', csrf: 'tok', dev: true, workshop: false, inbox: false },
   });
   const nav = block(signedIn, '<nav', '</nav>');
+  assert.match(nav, /aria-label="Main navigation"/);
+  assert.ok(!nav.includes('aria-label="Overview"'));
+  assert.match(nav, />Overview</);
   assert.deepEqual(hrefs(nav), ['./', 'box?id=decisions', 'box?id=digest', 'advanced']);
+  const nb = layout({
+    t: strings('nb'),
+    locale: 'nb',
+    status,
+    primaryBoxes: [{ id: 'digest', title: 'Digest' }],
+    title: '',
+    body: '',
+    user: { id: 'owner', role: 'owner', csrf: 'tok', dev: true, workshop: false, inbox: false },
+  });
+  const navNb = block(nb, '<nav', '</nav>');
+  assert.match(navNb, /aria-label="Hovednavigasjon"/);
+  assert.match(navNb, />Oversikt</);
+  assert.ok(!navNb.includes('aria-label="Oversikt"'));
 });
 
 function withNav(url, hide) {
@@ -208,6 +224,7 @@ test('owner nav and home cards follow primary order; advanced page follows advan
     hrefs(main).filter((h) => h.startsWith('box?id=')),
     OWNER_ADVANCED.map((id) => `box?id=${id}`),
   );
+  assert.match(main, /<a class="bt-advanced-link" href="box\?id=issues">/);
 });
 
 test('a hidden advanced box is absent for that role and still open for the owner', async () => {
@@ -273,10 +290,21 @@ test('aria-current follows Overview, the open box, or More', async () => {
   assert.deepEqual(currentHrefs(doc), ['advanced']);
 });
 
+test('a shared path highlights the primary box; an advanced-only path highlights More', async () => {
+  // PLAN.md is in primary decisions and in advanced now, and source includes every file.
+  const shared = block((await owner.get('doc?path=PLAN.md')).text, '<nav', '</nav>');
+  assert.deepEqual(currentHrefs(shared), ['box?id=decisions']);
+  // docs/guide.md is only in advanced boxes (docs, and source).
+  const onlyAdvanced = block((await owner.get('doc?path=docs%2Fguide.md')).text, '<nav', '</nav>');
+  assert.deepEqual(currentHrefs(onlyAdvanced), ['advanced']);
+});
+
 test('advanced page uses the Norwegian strings', async () => {
   const html = (await owner.get('advanced?lang=nb')).text;
   assert.match(html, /<h1>Avansert<\/h1>/);
   assert.match(html, /href="advanced">Mer</);
+  assert.match(html, /<nav class="bt-nav" aria-label="Hovednavigasjon">/);
+  assert.match(html, />Oversikt</);
 });
 
 test('signed-in POST /advanced is a 404 and login next=advanced lands there', async () => {
