@@ -22,6 +22,7 @@ const TOP_LEVEL_KEYS = [
 const HIDE_KEYS = ['boxes', 'paths', 'issue_labels', 'issue_title_patterns'];
 const ID_RE = /^[a-z0-9][a-z0-9_-]{0,63}$/;
 const ENV_RE = /^[A-Z][A-Z0-9_]{0,127}$/;
+export const DEFAULT_PUBLIC_EXTENSIONS = ['png', 'jpg', 'jpeg', 'gif', 'svg', 'webp'];
 
 export class ConfigError extends Error {
   constructor(errors) {
@@ -89,6 +90,21 @@ export function validateConfig(raw, { baseDir = process.cwd() } = {}) {
         continue;
       }
       out.push(parts.join('/'));
+    }
+    return out;
+  };
+  const extensionList = (v, where) => {
+    if (v === undefined) return [...DEFAULT_PUBLIC_EXTENSIONS];
+    const list = strList(v, where);
+    const out = [];
+    const seen = new Set();
+    for (const item of list) {
+      const s = item.trim().toLowerCase().replace(/^\./, '');
+      if (!/^[a-z0-9]{1,16}$/.test(s)) err(`${where} entries must be file extensions`);
+      else if (!seen.has(s)) {
+        seen.add(s);
+        out.push(s);
+      }
     }
     return out;
   };
@@ -377,16 +393,17 @@ export function validateConfig(raw, { baseDir = process.cwd() } = {}) {
   }
 
   // optional built static site served at /docs (DOCS_DIR overrides docs.dir at startup)
-  const docs = { dir: null, hidePaths: [] };
+  const docs = { dir: null, hidePaths: [], publicExtensions: [...DEFAULT_PUBLIC_EXTENSIONS] };
   if (raw.docs !== undefined) {
     if (!isObj(raw.docs)) err('docs must be a mapping');
     else {
-      unknownKeys(raw.docs, ['dir', 'hide_paths'], 'docs');
+      unknownKeys(raw.docs, ['dir', 'hide_paths', 'public_extensions'], 'docs');
       if (raw.docs.dir !== undefined) {
         if (typeof raw.docs.dir !== 'string' || !raw.docs.dir.trim() || raw.docs.dir.includes('\0')) err('docs.dir must be a directory path');
         else docs.dir = path.resolve(baseDir, raw.docs.dir);
       }
       if (raw.docs.hide_paths !== undefined) docs.hidePaths = pathPrefixes(raw.docs.hide_paths, 'docs.hide_paths');
+      docs.publicExtensions = extensionList(raw.docs.public_extensions, 'docs.public_extensions');
     }
   }
 

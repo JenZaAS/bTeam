@@ -20,9 +20,11 @@ Status: step 2 (login, private Workshop notes and the Inbox) on top of the step 
 
 A Markdown document is listed and served only when its YAML front matter contains an `audience` value that the signed-in user's role allows. The instance config key `audiences` is that list. When the key is omitted, the list is `all`. A role may set its own `audiences` list, which replaces the instance list for users with that role. Values match exactly.
 
-`/doc`, `/file`, `/raw` and `api/get_document` answer 404 when `audience` is missing, empty, or not in the list. Those documents are also left out of box listings and search. `get_document`, `get_box` and `search` use the same rules. Images and other non-Markdown files are unchanged.
+`/doc`, `/file`, `/raw` and `api/get_document` answer 404 when `audience` is missing, empty, or not in the list. Those documents are also left out of box listings and search. `get_document`, `get_box` and `search` use the same rules.
 
-After an upgrade, any Markdown file without an `audience` value in the allowed lists stops appearing in listings and search, and returns 404. To keep it visible, add `audience: all` to its front matter, sync, then reload. `audiences: []` hides all Markdown. The static `/docs` site is not filtered by audience, so only publish a site built from pages meant for everyone, including its search index, and use `docs.hide_paths` for anything to hide.
+A file that is not Markdown is listed and served only when the signed-in user's audiences include `owner`, unless its extension is listed in `docs.public_extensions`. When that key is omitted, the extensions are png, jpg, jpeg, gif, svg and webp. `/file`, `/raw`, the file tree and browser, `/search`, `api/search` and the `tool` commands use the same rule, including HEAD. A file left out answers 404, the same as a Markdown file whose audience is not in the list. `roles.owner.audiences` should list every audience value in use, for example `[all, owner]`.
+
+After an upgrade, any Markdown file without an `audience` value in the allowed lists stops appearing in listings and search, and returns 404. To keep it visible, add `audience: all` to its front matter, sync, then reload. `audiences: []` hides all Markdown. A non-Markdown file is owner-only unless its extension is in `docs.public_extensions`. It drops out of listings and search and returns 404 for a role whose audiences do not include `owner`. Set `roles.owner.audiences` to every audience value in use, for example `[all, owner]`, then reload. The static `/docs` site is not filtered by audience, so only publish a site built from pages meant for everyone, including its search index, and use `docs.hide_paths` for anything to hide.
 
 ## Static pages at /docs
 

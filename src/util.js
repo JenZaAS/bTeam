@@ -95,6 +95,12 @@ export function isMarkdown(p) {
   return /\.(md|markdown)$/i.test(p);
 }
 
+/** Lowercase extension without the dot, or "" when the path has none. */
+export function fileExtension(p) {
+  const ext = path.posix.extname(String(p ?? '')).toLowerCase();
+  return ext.startsWith('.') ? ext.slice(1) : '';
+}
+
 /** Guess whether a buffer is text (no NUL bytes in the first 8 KB). */
 export function looksLikeText(buf) {
   const n = Math.min(buf.length, 8192);

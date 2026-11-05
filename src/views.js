@@ -1,6 +1,6 @@
 // Server-rendered HTML views. No scripts, no external assets, only relative links,
 // so the UI works on its own, behind a path prefix and inside a sandboxed iframe.
-import { escapeHtml as e } from './util.js';
+import { escapeHtml as e, isMarkdown } from './util.js';
 import { localized } from './config.js';
 
 const q = encodeURIComponent;
@@ -231,7 +231,7 @@ export function searchView({ t, result }) {
     .map((r) =>
       r.kind === 'issue'
         ? `<li>#${e(r.number)} ${r.url ? `<a href="${e(r.url)}" rel="noopener noreferrer">${e(r.title)}</a>` : e(r.title)}<p>${e(r.snippet)}</p></li>`
-        : `<li>${docLink(r.path, r.title)} ${pathNote(r.path)}<p>${e(r.snippet)}</p></li>`,
+        : `<li>${isMarkdown(r.path) ? docLink(r.path, r.title) : `<a href="file?path=${q(r.path)}">${e(r.title)}</a>`} ${pathNote(r.path)}<p>${e(r.snippet)}</p></li>`,
     )
     .join('');
   return `<h1>${e(t.search)}: ${e(result.query)}</h1>${items ? `<ul class="bt-results">${items}</ul>` : `<p class="bt-empty">${e(t.noResults)}</p>`}`;
