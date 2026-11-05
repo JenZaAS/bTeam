@@ -8,6 +8,7 @@ import { INBOX_STATUSES } from '../src/inbox.js';
 import { loadConfig, ConfigError } from '../src/config.js';
 import { createViewer } from '../src/visibility.js';
 import { createHandler, startServer } from '../src/server.js';
+import { resolveDocsDir } from '../src/docs-static.js';
 import { loadThemeCss } from '../src/theme.js';
 import { resolveServeOptions, ServeOptionsError } from '../src/serve-options.js';
 import { backupDb, BackupError } from '../src/backup.js';
@@ -247,7 +248,7 @@ async function main() {
     const r = await inst.syncAll();
     console.log(`[bteam] source ${r.mirror ?? 'NOT synced'}${inst.issues ? `, issues ${r.issues ?? 'unavailable'}` : ''}`);
     inst.schedule();
-    const handler = createHandler({ core: inst.core, auth: state.auth, workshop: state.workshop, inbox: state.inbox, themeCss: loadThemeCss(inst.config.instance.theme), devUser });
+    const handler = createHandler({ core: inst.core, auth: state.auth, workshop: state.workshop, inbox: state.inbox, themeCss: loadThemeCss(inst.config.instance.theme), devUser, docsDir: resolveDocsDir(inst.config, process.env) });
     await startServer({ handler, host, port });
     if (isPublic) console.warn(`[bteam] bound to ${host}: serve only behind an HTTPS reverse proxy${inst.config.web.trustProxy ? '' : ' (web.trust_proxy is false: rate limits will see the proxy address)'}`);
     if (devUser) console.warn(`[bteam] DEVELOPMENT: requests from this machine act as "${devUser}" without login`);

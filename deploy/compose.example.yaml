@@ -31,6 +31,7 @@ services:
     volumes:
       - bteam-data:/data                   # mirror + <instance id>.sqlite (users, sessions, Workshop, Inbox); back this up
       - ./instance.yaml:/config/instance.yaml:ro
+      # - /path/to/built-site:/docs:ro   # optional static pages; set DOCS_DIR=/docs
       # - ./theme.json:/config/theme.json:ro   # if instance.theme is set (path relative to instance.yaml)
     ports:
       - "127.0.0.1:8080:8080"              # host loopback only, for local checks; pick a free port. Never 0.0.0.0.

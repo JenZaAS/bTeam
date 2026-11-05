@@ -116,6 +116,11 @@ users:                               # optional: default role for "bteam user ad
 viewer:
   default_role: contributor          # role for "bteam tool" when --role is not given (the web UI uses the signed-in user's role)
 
+# Optional built static site, served at /docs for signed-in users.
+# DOCS_DIR in the environment overrides this. A missing directory answers 404.
+docs:
+  dir: /var/lib/bteam/docs
+
 web:
   frame_ancestors: ["'self'"]        # who may embed the UI in an iframe
   secure_cookies: true               # false is only accepted when serving on 127.0.0.1 / ::1 (plain http, local testing)

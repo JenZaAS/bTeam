@@ -15,6 +15,7 @@ import { WorkshopError } from './workshop.js';
 import { InboxError } from './inbox.js';
 import { escapeHtml as e, safeRepoPath } from './util.js';
 import { localized } from './config.js';
+import { readDocsFile, cacheControlFor } from './docs-static.js';
 
 const BASE_CSS = fs.readFileSync(fileURLToPath(new URL('./assets/base.css', import.meta.url)), 'utf8');
 const PUBLIC_PATHS = new Set(['/login', '/healthz', '/assets/base.css', '/theme.css']);
@@ -35,7 +36,7 @@ export function isLoopback(host) {
  * @param {string} [o.themeCss]
  * @param {string|null} [o.devUser]  development only: act as this existing user for loopback clients, no login
  */
-export function createHandler({ core, auth, workshop = null, inbox = null, themeCss = '', devUser = null }) {
+export function createHandler({ core, auth, workshop = null, inbox = null, themeCss = '', devUser = null, docsDir = null }) {
   const config = core.config;
   const web = config.web;
   const secure = web.secureCookies;
@@ -137,6 +138,15 @@ export function createHandler({ core, auth, workshop = null, inbox = null, theme
       return redirect(res, next ? `login?next=${encodeURIComponent(safeNext(next))}` : 'login');
     }
 
+    // Use the raw path so ".." and encoded dots are still visible after URL parsing.
+    const rawPath = String(req.url ?? '').split('?')[0];
+    if (rawPath === '/docs' || rawPath.startsWith('/docs/') || rawPath.startsWith('/docs%')) {
+      if (req.method !== 'GET' && req.method !== 'HEAD') {
+        return send(res, 405, 'text/plain; charset=utf-8', 'method not allowed', { Allow: 'GET, HEAD', 'X-Robots-Tag': 'noindex', 'Cache-Control': 'private, no-store' });
+      }
+      return serveDocs(req, res, path, rawPath);
+    }
+
     const viewer = viewerFor(who.role);
     const user = { id: who.userId, role: who.role, csrf: who.csrf, dev: who.dev, workshop: workshopOn, inbox: inboxOn };
     const status = core.status(viewer);
@@ -235,6 +245,15 @@ export function createHandler({ core, auth, workshop = null, inbox = null, theme
       return send(res, 500, 'text/plain; charset=utf-8', 'internal error');
     }
   };
+
+  function serveDocs(req, res, path, rawPath) {
+    const file = readDocsFile(docsDir, path, rawPath);
+    const robots = { 'X-Robots-Tag': 'noindex' };
+    if (file.error === 'bad') return send(res, 400, 'text/plain; charset=utf-8', 'bad request', { ...robots, 'Cache-Control': 'private, no-store' });
+    if (file.error) return send(res, 404, 'text/plain; charset=utf-8', 'not found', { ...robots, 'Cache-Control': 'private, no-store' });
+    const body = req.method === 'HEAD' ? '' : file.body;
+    return send(res, 200, file.type, body, { ...robots, 'Cache-Control': cacheControlFor(file.rel) });
+  }
 
   async function handleLogin(req, res, t, locale, cookies, publicStatus) {
     const fail = (status, error) => {

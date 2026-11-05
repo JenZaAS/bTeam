@@ -17,7 +17,7 @@ export const BOX_TYPES = {
 const COMMON_BOX_KEYS = ['id', 'type', 'title', 'description', 'visible_to', 'nav', 'order'];
 const TOP_LEVEL_KEYS = [
   'instance', 'source', 'boxes', 'issue_source', 'links', 'roles', 'users', 'viewer', 'web',
-  'auth', 'workshop', 'inbox', 'assistant',
+  'auth', 'workshop', 'inbox', 'assistant', 'docs',
 ];
 const HIDE_KEYS = ['boxes', 'paths', 'issue_labels', 'issue_title_patterns'];
 const ID_RE = /^[a-z0-9][a-z0-9_-]{0,63}$/;
@@ -334,6 +334,19 @@ export function validateConfig(raw, { baseDir = process.cwd() } = {}) {
       }
   }
 
+  // optional built static site served at /docs (DOCS_DIR overrides docs.dir at startup)
+  const docs = { dir: null };
+  if (raw.docs !== undefined) {
+    if (!isObj(raw.docs)) err('docs must be a mapping');
+    else {
+      unknownKeys(raw.docs, ['dir'], 'docs');
+      if (raw.docs.dir !== undefined) {
+        if (typeof raw.docs.dir !== 'string' || !raw.docs.dir.trim() || raw.docs.dir.includes('\0')) err('docs.dir must be a directory path');
+        else docs.dir = path.resolve(baseDir, raw.docs.dir);
+      }
+    }
+  }
+
   // web
   const web = { frameAncestors: ["'self'"], secureCookies: true, sameSite: 'Lax', trustProxy: false, publicOrigin: null };
   if (raw.web !== undefined) {
@@ -437,6 +450,7 @@ export function validateConfig(raw, { baseDir = process.cwd() } = {}) {
     defaultRole,
     links,
     web,
+    docs,
     auth,
     workshop,
     inbox,
