@@ -27,8 +27,45 @@ test('a signed-out request for any /docs file is refused', async () => {
     const r = await anon.get(p);
     assert.ok(refused(r.status), `${p} -> ${r.status}`);
     assert.equal(r.text.includes('Static page'), false);
+    assert.equal(r.headers.get('x-robots-tag'), 'noindex');
+    assert.equal(r.headers.get('cache-control'), 'private, no-store');
     if (r.status === 303) assert.match(r.headers.get('location'), /login/);
   }
+});
+
+function rawReq(base, urlPath, { method = 'GET', cookie } = {}) {
+  const u = new URL(base);
+  return new Promise((resolve, reject) => {
+    const req = http.request(
+      { hostname: u.hostname, port: u.port, method, path: urlPath.startsWith('/') ? urlPath : `/${urlPath}`, headers: cookie ? { cookie } : {} },
+      (res) => {
+        const chunks = [];
+        res.on('data', (c) => chunks.push(c));
+        res.on('end', () => resolve({ status: res.statusCode, headers: res.headers, text: Buffer.concat(chunks).toString('utf8') }));
+      },
+    );
+    req.on('error', reject);
+    req.end();
+  });
+}
+
+test('HEAD and OPTIONS on /docs', async () => {
+  const anonHead = await rawReq(A.base, '/docs/index.html', { method: 'HEAD' });
+  assert.equal(anonHead.status, 303);
+  assert.equal(anonHead.headers['x-robots-tag'], 'noindex');
+  assert.equal(anonHead.headers['cache-control'], 'private, no-store');
+
+  const cookie = [...owner.jar].map(([k, v]) => `${k}=${v}`).join('; ');
+  const head = await rawReq(A.base, '/docs/index.html', { method: 'HEAD', cookie });
+  assert.equal(head.status, 200);
+  assert.equal(head.text, '');
+  assert.equal(head.headers['content-type'], 'text/html; charset=utf-8');
+  assert.equal(head.headers['cache-control'], 'private, no-store');
+  assert.equal(head.headers['x-robots-tag'], 'noindex');
+
+  const opt = await rawReq(A.base, '/docs', { method: 'OPTIONS' });
+  assert.equal(opt.status, 405);
+  assert.equal(opt.headers['x-robots-tag'], 'noindex');
 });
 
 test('a signed-in request gets the file and the cache headers', async () => {
@@ -73,22 +110,6 @@ test('a signed-in request gets the file and the cache headers', async () => {
   assert.equal(missing.headers.get('cache-control'), 'private, no-store');
 });
 
-function rawGet(base, urlPath, cookie) {
-  const u = new URL(base);
-  return new Promise((resolve, reject) => {
-    const req = http.request(
-      { hostname: u.hostname, port: u.port, path: `/${urlPath}`, headers: cookie ? { cookie } : {} },
-      (res) => {
-        const chunks = [];
-        res.on('data', (c) => chunks.push(c));
-        res.on('end', () => resolve({ status: res.statusCode, headers: res.headers, text: Buffer.concat(chunks).toString('utf8') }));
-      },
-    );
-    req.on('error', reject);
-    req.end();
-  });
-}
-
 test('path escapes are refused', async () => {
   const cookie = [...owner.jar].map(([k, v]) => `${k}=${v}`).join('; ');
   const paths = [
@@ -99,11 +120,26 @@ test('path escapes are refused', async () => {
     'docs/guide/../../package.json',
   ];
   for (const p of paths) {
-    const r = await rawGet(A.base, p, cookie);
+    const r = await rawReq(A.base, p, { cookie });
     assert.equal(r.status, 400, p);
     assert.equal(r.text.includes('Static page'), false);
     assert.equal(r.headers['x-robots-tag'], 'noindex');
   }
+});
+
+test('readDocsFile rejects crafted relative paths', () => {
+  // ".." that still lands on a file inside the folder is rejected by the segment check.
+  // A later root check would allow this one, so this case depends on that guard.
+  const dotdot = readDocsFile(fixture, '/docs/guide/../index.html', '/docs/guide/../index.html');
+  assert.equal(dotdot.error, 'bad');
+  const encoded = readDocsFile(fixture, '/docs/index.html', '/docs/%2e%2e/index.html');
+  assert.equal(encoded.error, 'bad');
+  const slash = readDocsFile(fixture, '/docs/index.html', '/docs/%2findex.html');
+  assert.equal(slash.error, 'bad');
+  const back = readDocsFile(fixture, '/docs/index.html', '/docs/..\\index.html');
+  assert.equal(back.error, 'bad');
+  const ok = readDocsFile(fixture, '/docs/index.html', '/docs/index.html');
+  assert.match(ok.body.toString('utf8'), /Static page/);
 });
 
 test('a symlink that leaves the root is refused', async () => {

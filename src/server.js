@@ -74,7 +74,7 @@ export function createHandler({ core, auth, workshop = null, inbox = null, theme
     });
     res.end(body);
   }
-  const redirect = (res, location, cookies = []) => send(res, 303, 'text/plain; charset=utf-8', 'see other', { Location: location, ...(cookies.length ? { 'Set-Cookie': cookies } : {}) });
+  const redirect = (res, location, cookies = [], extra = {}) => send(res, 303, 'text/plain; charset=utf-8', 'see other', { Location: location, ...extra, ...(cookies.length ? { 'Set-Cookie': cookies } : {}) });
 
   /** Resolve who is asking: a real session, the loopback-only dev user, or nobody. */
   function identify(req, cookies) {
@@ -88,7 +88,16 @@ export function createHandler({ core, auth, workshop = null, inbox = null, theme
 
   return async function handler(req, res) {
     const isPost = req.method === 'POST';
-    if (!isPost && req.method !== 'GET' && req.method !== 'HEAD') return send(res, 405, 'text/plain; charset=utf-8', 'method not allowed', { Allow: 'GET, HEAD, POST' });
+    const rawPath = String(req.url ?? '').split('?')[0];
+    const docsRequest = rawPath === '/docs' || rawPath.startsWith('/docs/') || rawPath.startsWith('/docs%');
+    if (!isPost && req.method !== 'GET' && req.method !== 'HEAD') {
+      const extra = { Allow: 'GET, HEAD, POST' };
+      if (docsRequest) {
+        extra['X-Robots-Tag'] = 'noindex';
+        extra['Cache-Control'] = 'private, no-store';
+      }
+      return send(res, 405, 'text/plain; charset=utf-8', 'method not allowed', extra);
+    }
     let url;
     try {
       url = new URL(req.url, 'http://local');
@@ -132,15 +141,15 @@ export function createHandler({ core, auth, workshop = null, inbox = null, theme
       return handleLogin(req, res, t, locale, cookies, publicStatus);
     }
     if (!who) {
-      if (path.startsWith('/api/')) return send(res, 401, 'application/json; charset=utf-8', JSON.stringify({ error: 'login required' }));
-      if (isPost) return redirect(res, 'login?expired=1');
+      const docsHeaders = docsRequest ? { 'X-Robots-Tag': 'noindex', 'Cache-Control': 'private, no-store' } : {};
+      if (path.startsWith('/api/')) return send(res, 401, 'application/json; charset=utf-8', JSON.stringify({ error: 'login required' }), docsHeaders);
+      if (isPost) return redirect(res, 'login?expired=1', [], docsHeaders);
       const next = path === '/' ? '' : `${path.slice(1)}${url.search}`;
-      return redirect(res, next ? `login?next=${encodeURIComponent(safeNext(next))}` : 'login');
+      return redirect(res, next ? `login?next=${encodeURIComponent(safeNext(next))}` : 'login', [], docsHeaders);
     }
 
     // Use the raw path so ".." and encoded dots are still visible after URL parsing.
-    const rawPath = String(req.url ?? '').split('?')[0];
-    if (rawPath === '/docs' || rawPath.startsWith('/docs/') || rawPath.startsWith('/docs%')) {
+    if (docsRequest) {
       if (req.method !== 'GET' && req.method !== 'HEAD') {
         return send(res, 405, 'text/plain; charset=utf-8', 'method not allowed', { Allow: 'GET, HEAD', 'X-Robots-Tag': 'noindex', 'Cache-Control': 'private, no-store' });
       }
