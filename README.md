@@ -30,6 +30,8 @@ After an upgrade, any Markdown file without an `audience` value in the allowed l
 
 Point `DOCS_DIR` at a built static HTML site (a directory of HTML, assets and `search/search_index.json`). You can instead set `docs.dir` in the instance config; when both are set, `DOCS_DIR` wins. The app then serves that folder at `/docs` for signed-in users. Paths ending in `/` serve `index.html` (no listings). Leave both unset, or point them at a folder that is not there, and `/docs` answers 404 while the app still starts. After a rebuild, replace the folder the app is reading. In a container, mount the folder read-only and set `DOCS_DIR` to the path inside the container. The reverse proxy only forwards `/docs` to the app.
 
+SVG files in that folder are served as `text/plain`, the same as a listed svg from `/raw`.
+
 `docs.hide_paths` is a list of path prefixes under `/docs`. A request for one of those prefixes, or for a path under it, answers 404. A path segment that starts with `.` (for example `.env`, `.git` or `.well-known`) is answered the same way as a `..` segment.
 
 License: MIT, see [LICENSE](LICENSE).
