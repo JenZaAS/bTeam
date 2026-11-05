@@ -100,6 +100,10 @@ links:
 # replaces this list for users with that role. Values match exactly.
 # A non-Markdown file is listed and served only when the role's audiences include
 # owner, unless its extension is in docs.public_extensions.
+# A file's visibility is decided by its last extension, so anything committed
+# under a public extension is visible to every role that can see the box.
+# Writers must not commit sensitive material with a public extension.
+# If svg is added, it is served as plain text, never as image/svg+xml.
 audiences: [all]
 
 # Visibility: roles only ever HIDE content; boxes define what exists at all.
@@ -130,7 +134,7 @@ viewer:
 docs:
   dir: /var/lib/bteam/docs
   hide_paths: []                     # prefixes under /docs that answer 404, for example ["drafts"]
-  public_extensions: [png, jpg, jpeg, gif, svg, webp]   # other non-Markdown extensions are owner-only
+  public_extensions: [png, jpg, jpeg, gif, webp]   # other non-Markdown extensions are owner-only; svg, if added, is plain text, never image/svg+xml
 
 web:
   frame_ancestors: ["'self'"]        # who may embed the UI in an iframe

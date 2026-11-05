@@ -71,6 +71,7 @@ export function snippet(text, needle, radius = 80) {
   return (start > 0 ? '…' : '') + text.slice(start, end).replace(/\s+/g, ' ').trim() + (end < text.length ? '…' : '');
 }
 
+// Don't add image/svg+xml here without Content-Disposition: attachment or a strict SVG content policy.
 export const IMAGE_TYPES = {
   '.png': 'image/png',
   '.jpg': 'image/jpeg',

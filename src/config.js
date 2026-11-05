@@ -22,7 +22,7 @@ const TOP_LEVEL_KEYS = [
 const HIDE_KEYS = ['boxes', 'paths', 'issue_labels', 'issue_title_patterns'];
 const ID_RE = /^[a-z0-9][a-z0-9_-]{0,63}$/;
 const ENV_RE = /^[A-Z][A-Z0-9_]{0,127}$/;
-export const DEFAULT_PUBLIC_EXTENSIONS = ['png', 'jpg', 'jpeg', 'gif', 'svg', 'webp'];
+export const DEFAULT_PUBLIC_EXTENSIONS = ['png', 'jpg', 'jpeg', 'gif', 'webp'];
 
 export class ConfigError extends Error {
   constructor(errors) {
