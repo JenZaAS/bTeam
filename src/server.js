@@ -191,7 +191,7 @@ export function createHandler({ core, auth, workshop = null, inbox = null, theme
         case '/':
           return page('', homeView({ t, locale, primaryBoxes: primary, status }), { currentBox: '' });
         case '/advanced':
-          return page(t.advanced, advancedView({ t, locale, advancedBoxes: advanced, status }), { section: 'advanced' });
+          return page(t.more, advancedView({ t, locale, advancedBoxes: advanced, status }), { section: 'advanced' });
         case '/box': {
           const data = await core.get_box(viewer, params.id ?? '', params);
           const v = boxView({ t, locale, data, params });

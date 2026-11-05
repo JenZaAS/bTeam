@@ -47,7 +47,7 @@ Boxes are filled by **rules in the instance config**: path globs, filename patte
 | `issues` | Open issues filtered by label and state. |
 | `source-browser` | A file tree and file viewer over the mirror, with include/exclude globs. |
 
-A box may set nav to primary (the default) or advanced, and an integer order; the signed-in nav lists Overview, then primary boxes by order (unset last, ties keep config order), then Workshop and Inbox when enabled, then More, which opens an Advanced page of the advanced boxes plus the mirror commit and sync time.
+A box may set nav to primary (the default) or advanced, and an integer order; the signed-in nav lists Overview, then primary boxes by order (unset last, ties keep config order), then Workshop and Inbox when enabled, then More, which opens the More page of the advanced boxes plus the mirror commit and sync time.
 
 ## 4a. Roles and visibility
 - The instance config defines **roles**. Each user account (in the instance database) has one role; `users:` in the config may only suggest a default role for `bteam user add`, never credentials.
