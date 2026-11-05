@@ -78,7 +78,7 @@ test('a signed-in request gets the file and the cache headers', async () => {
   assert.equal(page.headers.get('x-content-type-options'), 'nosniff');
   assert.equal(
     page.headers.get('content-security-policy'),
-    "default-src 'none'; script-src 'self'; connect-src 'self'; worker-src 'self'; img-src 'self'; style-src 'self'; form-action 'self'; base-uri 'none'; frame-ancestors 'self'",
+    "default-src 'none'; script-src 'self'; connect-src 'self'; worker-src 'self'; img-src 'self'; style-src 'self'; form-action 'none'; base-uri 'none'; frame-ancestors 'self'",
   );
 
   const slash = await owner.get('docs/');

@@ -52,13 +52,13 @@ export function createHandler({ core, auth, workshop = null, inbox = null, theme
   const workshopOn = Boolean(workshop && config.workshop.enabled);
   const inboxOn = Boolean(inbox && config.inbox.enabled);
 
-  const cspFor = (allowDocsScripts) => {
+  const cspFor = (docs) => {
     const parts = ["default-src 'none'"];
-    if (allowDocsScripts) parts.push("script-src 'self'", "connect-src 'self'", "worker-src 'self'");
+    if (docs) parts.push("script-src 'self'", "connect-src 'self'", "worker-src 'self'");
     parts.push(
       "img-src 'self'",
       "style-src 'self'",
-      "form-action 'self'",
+      docs ? "form-action 'none'" : "form-action 'self'",
       "base-uri 'none'",
       `frame-ancestors ${web.frameAncestors.join(' ')}`,
     );
