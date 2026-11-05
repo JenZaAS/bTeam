@@ -7,7 +7,8 @@ export function createViewer(config, roleName) {
   if (!role) throw new Error(`unknown role "${roleName}"`);
   const hiddenPath = globMatcher(role.hide.paths);
   const hiddenLabel = labelMatcher(role.hide.issueLabels);
-  const audiences = Array.isArray(role.audiences) ? role.audiences : ['all'];
+  // The config supplies a list (default ["all"] when the key is omitted). Anything else sees nothing.
+  const audiences = Array.isArray(role.audiences) ? role.audiences : [];
   return {
     role: role.name,
     policy: role.policy,

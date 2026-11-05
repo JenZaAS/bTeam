@@ -131,6 +131,8 @@ The mirror doesn't need a backup, because it is re-cloned from the source.
 2. Build the new commit as `bteam:<new short sha>`, set the new tag in `compose.yaml`, and run `docker compose up -d`.
 3. Run the checks in section 9. Database migrations run automatically at start, are forward-only, and are listed in the release notes when there are any.
 
+After an upgrade, any Markdown file without an `audience` value in the allowed lists stops appearing in listings and search, and returns 404. To keep it visible, add `audience: all` to its front matter, sync, then reload. `audiences: []` hides all Markdown. The static `/docs` site is not filtered by audience, so only publish a site built from pages meant for everyone, including its search index, and use `docs.hide_paths` for anything to hide.
+
 **Rollback.** Put the previous image tag or ID back in `compose.yaml` and run `docker compose up -d`. If the new version migrated the database, also stop the container, restore the backup into the volume, and start it again:
 ```sh
 docker compose stop bteam
