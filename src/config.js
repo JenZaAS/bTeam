@@ -17,7 +17,7 @@ export const BOX_TYPES = {
 const COMMON_BOX_KEYS = ['id', 'type', 'title', 'description', 'visible_to', 'nav', 'order'];
 const TOP_LEVEL_KEYS = [
   'instance', 'source', 'boxes', 'issue_source', 'links', 'roles', 'users', 'viewer', 'web',
-  'auth', 'workshop', 'inbox', 'assistant', 'docs',
+  'auth', 'workshop', 'inbox', 'assistant', 'docs', 'audiences',
 ];
 const HIDE_KEYS = ['boxes', 'paths', 'issue_labels', 'issue_title_patterns'];
 const ID_RE = /^[a-z0-9][a-z0-9_-]{0,63}$/;
@@ -63,6 +63,34 @@ export function validateConfig(raw, { baseDir = process.cwd() } = {}) {
   };
   const unknownKeys = (obj, allowed, where) => {
     for (const k of Object.keys(obj)) if (!allowed.includes(k)) err(`${where}: unknown key "${k}"`);
+  };
+  const audienceList = (v, where) => {
+    const list = strList(v, where);
+    const out = [];
+    const seen = new Set();
+    for (const item of list) {
+      const s = item.trim();
+      if (!/^[\w.-]{1,64}$/.test(s)) err(`${where} entries must be short words`);
+      else if (!seen.has(s)) {
+        seen.add(s);
+        out.push(s);
+      }
+    }
+    return out;
+  };
+  const pathPrefixes = (v, where) => {
+    const list = strList(v, where);
+    const out = [];
+    for (const item of list) {
+      const s = item.trim().replace(/^\/+/, '').replace(/\/+$/, '');
+      const parts = s.split('/');
+      if (!s || item.includes('\\') || item.includes('\0') || parts.some((p) => p === '' || p === '.' || p === '..')) {
+        err(`${where} entries must be path prefixes under /docs`);
+        continue;
+      }
+      out.push(parts.join('/'));
+    }
+    return out;
   };
 
   if (!isObj(raw)) throw new ConfigError(['config must be a YAML mapping']);
@@ -149,6 +177,11 @@ export function validateConfig(raw, { baseDir = process.cwd() } = {}) {
     }
   }
 
+  // Audience values a signed-in user may see. Omitted means ["all"].
+  // A role's own list, when set, replaces this one for that role.
+  let instanceAudiences = ['all'];
+  if (raw.audiences !== undefined) instanceAudiences = audienceList(raw.audiences, 'audiences');
+
   // roles and users (visibility)
   const roles = {};
   if (raw.roles !== undefined) {
@@ -161,7 +194,7 @@ export function validateConfig(raw, { baseDir = process.cwd() } = {}) {
           err(`roles.${name} must be a mapping`);
           continue;
         }
-        unknownKeys(rr, ['description', 'hide', 'policy'], `roles.${name}`);
+        unknownKeys(rr, ['description', 'hide', 'policy', 'audiences'], `roles.${name}`);
         const hide = rr.hide ?? {};
         if (!isObj(hide)) err(`roles.${name}.hide must be a mapping`);
         else unknownKeys(hide, HIDE_KEYS, `roles.${name}.hide`);
@@ -184,6 +217,7 @@ export function validateConfig(raw, { baseDir = process.cwd() } = {}) {
             issueTitlePatterns: titleRes.filter(Boolean),
           },
           policy: isObj(rr.policy) ? rr.policy : {},
+          audiences: rr.audiences === undefined ? [...instanceAudiences] : audienceList(rr.audiences, `roles.${name}.audiences`),
         };
       }
       for (const r of Object.values(roles)) {
@@ -194,7 +228,15 @@ export function validateConfig(raw, { baseDir = process.cwd() } = {}) {
       }
     }
   }
-  if (!Object.keys(roles).length) roles.default = { name: 'default', description: '', hide: { boxes: [], paths: [], issueLabels: [], issueTitlePatterns: [] }, policy: {} };
+  if (!Object.keys(roles).length) {
+    roles.default = {
+      name: 'default',
+      description: '',
+      hide: { boxes: [], paths: [], issueLabels: [], issueTitlePatterns: [] },
+      policy: {},
+      audiences: [...instanceAudiences],
+    };
+  }
 
   const users = [];
   if (raw.users !== undefined) {
@@ -335,15 +377,16 @@ export function validateConfig(raw, { baseDir = process.cwd() } = {}) {
   }
 
   // optional built static site served at /docs (DOCS_DIR overrides docs.dir at startup)
-  const docs = { dir: null };
+  const docs = { dir: null, hidePaths: [] };
   if (raw.docs !== undefined) {
     if (!isObj(raw.docs)) err('docs must be a mapping');
     else {
-      unknownKeys(raw.docs, ['dir'], 'docs');
+      unknownKeys(raw.docs, ['dir', 'hide_paths'], 'docs');
       if (raw.docs.dir !== undefined) {
         if (typeof raw.docs.dir !== 'string' || !raw.docs.dir.trim() || raw.docs.dir.includes('\0')) err('docs.dir must be a directory path');
         else docs.dir = path.resolve(baseDir, raw.docs.dir);
       }
+      if (raw.docs.hide_paths !== undefined) docs.hidePaths = pathPrefixes(raw.docs.hide_paths, 'docs.hide_paths');
     }
   }
 
@@ -451,6 +494,7 @@ export function validateConfig(raw, { baseDir = process.cwd() } = {}) {
     links,
     web,
     docs,
+    audiences: instanceAudiences,
     auth,
     workshop,
     inbox,

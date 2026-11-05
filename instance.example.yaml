@@ -95,11 +95,17 @@ links:
   - label: Example test site
     url: https://test.example.com
 
+# Markdown is listed and served only when front matter audience is in this list.
+# When the key is omitted, the list is [all]. A role's audiences list, when set,
+# replaces this list for users with that role. Values match exactly.
+audiences: [all]
+
 # Visibility: roles only ever HIDE content; boxes define what exists at all.
 roles:
   owner:
     description: Sees everything.
   contributor:
+    audiences: [all]                 # optional; replaces the instance audiences list for this role
     hide:
       boxes: []                      # box ids
       paths: ["deploy/**"]           # globs, applied to lists, documents, files, images and search
@@ -120,6 +126,7 @@ viewer:
 # DOCS_DIR in the environment overrides this. A missing directory answers 404.
 docs:
   dir: /var/lib/bteam/docs
+  hide_paths: []                     # prefixes under /docs that answer 404, for example ["drafts"]
 
 web:
   frame_ancestors: ["'self'"]        # who may embed the UI in an iframe

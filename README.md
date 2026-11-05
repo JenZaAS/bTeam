@@ -16,8 +16,18 @@ Status: step 2 (login, private Workshop notes and the Inbox) on top of the step 
 - Running locally: [docs/RUN.md](docs/RUN.md)
 - Deploying (Docker, reverse proxy, backup, rollback): [docs/DEPLOY.md](docs/DEPLOY.md)
 
+## Document audience
+
+A Markdown document is listed and served only when its YAML front matter contains an `audience` value that the signed-in user's role allows. The instance config key `audiences` is that list. When the key is omitted, the list is `all`. A role may set its own `audiences` list, which replaces the instance list for users with that role. Values match exactly.
+
+`/doc`, `/file`, `/raw` and `api/get_document` answer 404 when `audience` is missing, empty, or not in the list. Those documents are also left out of box listings and search. `get_document`, `get_box` and `search` use the same rules. Images and other non-Markdown files are unchanged.
+
+After an upgrade, any Markdown file without an `audience` value in the allowed lists stops appearing in listings and search, and returns 404. To keep it visible, add `audience: all` to its front matter, sync, then reload. `audiences: []` hides all Markdown. The static `/docs` site is not filtered by audience, so only publish a site built from pages meant for everyone, including its search index, and use `docs.hide_paths` for anything to hide.
+
 ## Static pages at /docs
 
 Point `DOCS_DIR` at a built static HTML site (a directory of HTML, assets and `search/search_index.json`). You can instead set `docs.dir` in the instance config; when both are set, `DOCS_DIR` wins. The app then serves that folder at `/docs` for signed-in users. Paths ending in `/` serve `index.html` (no listings). Leave both unset, or point them at a folder that is not there, and `/docs` answers 404 while the app still starts. After a rebuild, replace the folder the app is reading. In a container, mount the folder read-only and set `DOCS_DIR` to the path inside the container. The reverse proxy only forwards `/docs` to the app.
+
+`docs.hide_paths` is a list of path prefixes under `/docs`. A request for one of those prefixes, or for a path under it, answers 404. A path segment that starts with `.` (for example `.env`, `.git` or `.well-known`) is answered the same way as a `..` segment.
 
 License: MIT, see [LICENSE](LICENSE).

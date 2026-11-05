@@ -256,7 +256,7 @@ export function createHandler({ core, auth, workshop = null, inbox = null, theme
   };
 
   function serveDocs(req, res, path, rawPath) {
-    const file = readDocsFile(docsDir, path, rawPath);
+    const file = readDocsFile(docsDir, path, rawPath, { hidePaths: config.docs?.hidePaths ?? [] });
     const robots = { 'X-Robots-Tag': 'noindex' };
     if (file.error === 'bad') return send(res, 400, 'text/plain; charset=utf-8', 'bad request', { ...robots, 'Cache-Control': 'private, no-store' });
     if (file.error) return send(res, 404, 'text/plain; charset=utf-8', 'not found', { ...robots, 'Cache-Control': 'private, no-store' });

@@ -2,8 +2,8 @@
 // Every tool takes a viewer (see visibility.js) and only returns what that viewer may see.
 // The web UI, the CLI and (later) an MCP server all call these same tools.
 import path from 'node:path';
-import { globMatcher, imageType, isMarkdown, looksLikeText, snippet, safeRepoPath } from './util.js';
-import { renderMarkdown, splitFrontMatter, documentTitle, headings, sections, plainText } from './markdown.js';
+import { globMatcher, imageType, isMarkdown, looksLikeText, snippet, safeRepoPath, hasDotSegment } from './util.js';
+import { renderMarkdown, splitFrontMatter, documentTitle, headings, sections, plainText, audienceValue } from './markdown.js';
 
 const SEARCHABLE_TYPES = new Set(['digest', 'decisions', 'documents', 'open-questions', 'gallery']);
 const MAX_RENDER_BYTES = 2 * 1024 * 1024;
@@ -49,18 +49,51 @@ export function createCore({ config, mirror, issues = null }) {
 
   /** Whether `p` may be shown to `viewer`: inside a visible box and not hidden for the role. */
   function reachable(viewer, p) {
+    if (typeof p !== 'string' || hasDotSegment(p)) return false;
     if (!viewer.canSeePath(p)) return false;
     return visibleBoxes(viewer).some((b) => matchers.get(b.id)(p));
   }
 
+  // Audience values for the current commit. A missing entry means the file is not Markdown.
+  let audienceCache = null;
+  async function audienceMap() {
+    if (audienceCache && audienceCache.commit === mirror.commit) return audienceCache.map;
+    const commit = mirror.commit;
+    const map = new Map();
+    if (commit) {
+      for (const f of await mirror.files()) {
+        if (!isMarkdown(f.path)) continue;
+        let value = '';
+        if (f.size <= MAX_RENDER_BYTES) {
+          try {
+            value = audienceValue(splitFrontMatter(await mirror.readText(f.path)).data);
+          } catch {
+            value = '';
+          }
+        }
+        map.set(f.path, value);
+      }
+    }
+    if (mirror.commit === commit) audienceCache = { commit, map };
+    return map;
+  }
+
+  /** Markdown is shown only when its audience value is in the viewer's list. Other files are unchanged. */
+  function seesMarkdown(viewer, p, map) {
+    if (!isMarkdown(p)) return true;
+    return viewer.canSeeAudience(map.get(p) ?? '');
+  }
+
   async function filesFor(viewer, box) {
+    const map = await audienceMap();
     const m = matchers.get(box.id);
-    return (await mirror.files()).filter((f) => m(f.path) && viewer.canSeePath(f.path));
+    return (await mirror.files()).filter((f) => m(f.path) && viewer.canSeePath(f.path) && !hasDotSegment(f.path) && seesMarkdown(viewer, f.path, map));
   }
 
   async function existsFn(viewer) {
+    const map = await audienceMap();
     const set = new Set((await mirror.files()).map((f) => f.path));
-    return (p) => set.has(p) && reachable(viewer, p);
+    return (p) => set.has(p) && reachable(viewer, p) && seesMarkdown(viewer, p, map);
   }
 
   async function renderFile(viewer, p, text) {
@@ -121,7 +154,9 @@ export function createCore({ config, mirror, issues = null }) {
       }
       entries.sort((a, b) => String(b.date ?? '').localeCompare(String(a.date ?? '')) || b.path.localeCompare(a.path));
       const out = { entries };
-      if (!entries.length && box.fallback && viewer.canSeePath(box.fallback.file) && (await mirror.has(box.fallback.file))) {
+      const fallbackFile = box.fallback?.file;
+      const fallbackMap = await audienceMap();
+      if (!entries.length && fallbackFile && reachable(viewer, fallbackFile) && seesMarkdown(viewer, fallbackFile, fallbackMap) && (await mirror.has(fallbackFile))) {
         const text = (await readText(box.fallback.file)) ?? '';
         const secs = sections(splitFrontMatter(text).body, 6).filter((s) => !box.fallback.heading || box.fallback.heading.test(s.heading));
         const exists = await existsFn(viewer);
@@ -176,9 +211,10 @@ export function createCore({ config, mirror, issues = null }) {
       }
       let notes = null;
       if (box.notesFile) {
+        const notesMap = await audienceMap();
         for (const root of box.roots) {
           const np = `${root}${folder ? `${folder}/` : ''}${box.notesFile}`;
-          if (viewer.canSeePath(np) && (await mirror.has(np))) {
+          if (reachable(viewer, np) && seesMarkdown(viewer, np, notesMap) && (await mirror.has(np))) {
             const text = (await readText(np)) ?? '';
             notes = { path: np, toc: headings(splitFrontMatter(text).body), html: await renderFile(viewer, np, text) };
             break;
@@ -281,6 +317,7 @@ export function createCore({ config, mirror, issues = null }) {
     async get_document(viewer, p) {
       const safe = safeRepoPath(p);
       if (!safe || !isMarkdown(safe) || !reachable(viewer, safe) || !(await mirror.has(safe))) throw new NotFound(String(p));
+      if (!seesMarkdown(viewer, safe, await audienceMap())) throw new NotFound(String(p));
       const text = await readText(safe);
       if (text === null) throw new NotFound('document too large');
       const body = splitFrontMatter(text).body;
@@ -296,6 +333,7 @@ export function createCore({ config, mirror, issues = null }) {
     async get_file(viewer, p) {
       const safe = safeRepoPath(p);
       if (!safe || !reachable(viewer, safe)) throw new NotFound(String(p));
+      if (!seesMarkdown(viewer, safe, await audienceMap())) throw new NotFound(String(p));
       const info = await mirror.stat(safe);
       if (!info) throw new NotFound(safe);
       if (isMarkdown(safe)) return { path: safe, kind: 'markdown', size: info.size };
@@ -310,6 +348,7 @@ export function createCore({ config, mirror, issues = null }) {
     async read_raw(viewer, p) {
       const safe = safeRepoPath(p);
       if (!safe || !reachable(viewer, safe) || !(await mirror.has(safe))) throw new NotFound(String(p));
+      if (!seesMarkdown(viewer, safe, await audienceMap())) throw new NotFound(String(p));
       const type = imageType(safe);
       return { path: safe, contentType: type ?? 'text/plain; charset=utf-8', body: await mirror.read(safe) };
     },

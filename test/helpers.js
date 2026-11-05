@@ -38,11 +38,26 @@ export const FILES = {
   'secret/.env': 'NOT_A_REAL_VALUE=1\n',
 };
 
-export function makeSourceRepo(files = FILES) {
+/** Mark Markdown with audience all so existing fixtures stay visible. Pass stampAudience: false to keep a file unmarked. */
+export function withDefaultAudience(files) {
+  const out = {};
+  for (const [p, content] of Object.entries(files)) {
+    if (typeof content !== 'string' || !/\.(md|markdown)$/i.test(p)) {
+      out[p] = content;
+      continue;
+    }
+    if (/^---\r?\n/.test(content)) out[p] = content.replace(/^---\r?\n/, (m) => `${m}audience: all\n`);
+    else out[p] = `---\naudience: all\n---\n${content}`;
+  }
+  return out;
+}
+
+export function makeSourceRepo(files = FILES, { stampAudience = true } = {}) {
+  const written = stampAudience ? withDefaultAudience(files) : files;
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'bteam-src-'));
   const git = (...args) => execFileSync('git', args, { cwd: dir, stdio: 'pipe' });
   git('init', '-q', '-b', 'main');
-  for (const [p, content] of Object.entries(files)) {
+  for (const [p, content] of Object.entries(written)) {
     fs.mkdirSync(path.join(dir, path.dirname(p)), { recursive: true });
     fs.writeFileSync(path.join(dir, p), content);
   }
@@ -104,14 +119,16 @@ export function fakeFetch(items = ISSUES, calls = []) {
   };
 }
 
-export async function makeInstance({ raw, files } = {}) {
-  const src = makeSourceRepo(files);
+export async function makeInstance({ raw, files, stampAudience = true } = {}) {
+  const src = makeSourceRepo(files, { stampAudience });
   const config = validateConfig(raw ?? sampleRawConfig(src.url));
   const data = fs.mkdtempSync(path.join(os.tmpdir(), 'bteam-data-'));
   const mirror = new Mirror({ url: config.source.url, branch: config.source.branch, dir: path.join(data, 'mirror.git'), tokenEnv: null });
   await mirror.sync();
-  const issues = new IssueSource({ repo: config.issueSource.repo, tokenEnv: 'TEST_ISSUES_TOKEN', env: {}, fetchImpl: fakeFetch() });
-  await issues.refresh();
+  const issues = config.issueSource
+    ? new IssueSource({ repo: config.issueSource.repo, tokenEnv: 'TEST_ISSUES_TOKEN', env: {}, fetchImpl: fakeFetch() })
+    : null;
+  if (issues) await issues.refresh();
   const core = createCore({ config, mirror, issues });
   return { src, config, mirror, issues, core, owner: createViewer(config, 'owner'), designer: createViewer(config, 'designer') };
 }
