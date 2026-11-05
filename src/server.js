@@ -15,6 +15,7 @@ import { WorkshopError } from './workshop.js';
 import { InboxError } from './inbox.js';
 import { escapeHtml as e, safeRepoPath } from './util.js';
 import { localized } from './config.js';
+import { readDocsFile, cacheControlFor } from './docs-static.js';
 
 const BASE_CSS = fs.readFileSync(fileURLToPath(new URL('./assets/base.css', import.meta.url)), 'utf8');
 const PUBLIC_PATHS = new Set(['/login', '/healthz', '/assets/base.css', '/theme.css']);
@@ -35,7 +36,7 @@ export function isLoopback(host) {
  * @param {string} [o.themeCss]
  * @param {string|null} [o.devUser]  development only: act as this existing user for loopback clients, no login
  */
-export function createHandler({ core, auth, workshop = null, inbox = null, themeCss = '', devUser = null }) {
+export function createHandler({ core, auth, workshop = null, inbox = null, themeCss = '', devUser = null, docsDir = null }) {
   const config = core.config;
   const web = config.web;
   const secure = web.secureCookies;
@@ -73,7 +74,7 @@ export function createHandler({ core, auth, workshop = null, inbox = null, theme
     });
     res.end(body);
   }
-  const redirect = (res, location, cookies = []) => send(res, 303, 'text/plain; charset=utf-8', 'see other', { Location: location, ...(cookies.length ? { 'Set-Cookie': cookies } : {}) });
+  const redirect = (res, location, cookies = [], extra = {}) => send(res, 303, 'text/plain; charset=utf-8', 'see other', { Location: location, ...extra, ...(cookies.length ? { 'Set-Cookie': cookies } : {}) });
 
   /** Resolve who is asking: a real session, the loopback-only dev user, or nobody. */
   function identify(req, cookies) {
@@ -87,7 +88,16 @@ export function createHandler({ core, auth, workshop = null, inbox = null, theme
 
   return async function handler(req, res) {
     const isPost = req.method === 'POST';
-    if (!isPost && req.method !== 'GET' && req.method !== 'HEAD') return send(res, 405, 'text/plain; charset=utf-8', 'method not allowed', { Allow: 'GET, HEAD, POST' });
+    const rawPath = String(req.url ?? '').split('?')[0];
+    const docsRequest = rawPath === '/docs' || rawPath.startsWith('/docs/') || rawPath.startsWith('/docs%');
+    if (!isPost && req.method !== 'GET' && req.method !== 'HEAD') {
+      const extra = { Allow: 'GET, HEAD, POST' };
+      if (docsRequest) {
+        extra['X-Robots-Tag'] = 'noindex';
+        extra['Cache-Control'] = 'private, no-store';
+      }
+      return send(res, 405, 'text/plain; charset=utf-8', 'method not allowed', extra);
+    }
     let url;
     try {
       url = new URL(req.url, 'http://local');
@@ -131,10 +141,19 @@ export function createHandler({ core, auth, workshop = null, inbox = null, theme
       return handleLogin(req, res, t, locale, cookies, publicStatus);
     }
     if (!who) {
-      if (path.startsWith('/api/')) return send(res, 401, 'application/json; charset=utf-8', JSON.stringify({ error: 'login required' }));
-      if (isPost) return redirect(res, 'login?expired=1');
+      const docsHeaders = docsRequest ? { 'X-Robots-Tag': 'noindex', 'Cache-Control': 'private, no-store' } : {};
+      if (path.startsWith('/api/')) return send(res, 401, 'application/json; charset=utf-8', JSON.stringify({ error: 'login required' }), docsHeaders);
+      if (isPost) return redirect(res, 'login?expired=1', [], docsHeaders);
       const next = path === '/' ? '' : `${path.slice(1)}${url.search}`;
-      return redirect(res, next ? `login?next=${encodeURIComponent(safeNext(next))}` : 'login');
+      return redirect(res, next ? `login?next=${encodeURIComponent(safeNext(next))}` : 'login', [], docsHeaders);
+    }
+
+    // Use the raw path so ".." and encoded dots are still visible after URL parsing.
+    if (docsRequest) {
+      if (req.method !== 'GET' && req.method !== 'HEAD') {
+        return send(res, 405, 'text/plain; charset=utf-8', 'method not allowed', { Allow: 'GET, HEAD', 'X-Robots-Tag': 'noindex', 'Cache-Control': 'private, no-store' });
+      }
+      return serveDocs(req, res, path, rawPath);
     }
 
     const viewer = viewerFor(who.role);
@@ -235,6 +254,15 @@ export function createHandler({ core, auth, workshop = null, inbox = null, theme
       return send(res, 500, 'text/plain; charset=utf-8', 'internal error');
     }
   };
+
+  function serveDocs(req, res, path, rawPath) {
+    const file = readDocsFile(docsDir, path, rawPath);
+    const robots = { 'X-Robots-Tag': 'noindex' };
+    if (file.error === 'bad') return send(res, 400, 'text/plain; charset=utf-8', 'bad request', { ...robots, 'Cache-Control': 'private, no-store' });
+    if (file.error) return send(res, 404, 'text/plain; charset=utf-8', 'not found', { ...robots, 'Cache-Control': 'private, no-store' });
+    const body = req.method === 'HEAD' ? '' : file.body;
+    return send(res, 200, file.type, body, { ...robots, 'Cache-Control': cacheControlFor(file.rel) });
+  }
 
   async function handleLogin(req, res, t, locale, cookies, publicStatus) {
     const fail = (status, error) => {

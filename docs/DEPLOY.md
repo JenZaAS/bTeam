@@ -51,6 +51,7 @@ The container runs with a read-only root filesystem: everything it writes goes t
 | `PORT` | `8080` | Listen port. |
 | `BTEAM_CONFIG` | `/config/instance.yaml` | Instance config. |
 | `BTEAM_DATA_DIR` | `/data` | Mirror and database. |
+| `DOCS_DIR` | unset | Built static site served at `/docs`. Overrides `docs.dir`. |
 | token env vars | unset | As named in the config; values only in `.env`. |
 | `NODE_OPTIONS` | unset | Example: `--max-old-space-size=256`. |
 
