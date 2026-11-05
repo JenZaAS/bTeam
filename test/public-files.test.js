@@ -96,7 +96,7 @@ after(() => app?.close());
 
 test('docs.public_extensions defaults to image types and rejects bad entries', () => {
   const raw = rawConfig('file:///tmp/repo');
-  assert.deepEqual(validateConfig(raw).docs.publicExtensions, ['png', 'jpg', 'jpeg', 'gif', 'svg', 'webp']);
+  assert.deepEqual(validateConfig(raw).docs.publicExtensions, ['png', 'jpg', 'jpeg', 'gif', 'webp']);
 
   raw.docs = { public_extensions: ['.PNG', 'jpg', 'JPG'] };
   assert.deepEqual(validateConfig(raw).docs.publicExtensions, ['png', 'jpg']);
@@ -110,6 +110,33 @@ test('docs.public_extensions defaults to image types and rejects bad entries', (
     next.docs = { public_extensions: bad };
     assert.throws(() => validateConfig(next), /public_extensions/, JSON.stringify(bad));
   }
+});
+
+test('an svg file is hidden from a role without owner by default and visible when listed', async () => {
+  const repo = makeSourceRepo(
+    {
+      'img/mark.svg': '<svg>mark</svg>\n',
+      'docs/read.md': '---\naudience: all\n---\n# Read\n',
+    },
+    { stampAudience: false },
+  );
+  const hidden = await makeInstance({ raw: rawConfig(repo.url) });
+  await assert.rejects(() => hidden.core.get_file(hidden.designer, 'img/mark.svg'), (err) => err instanceof NotFound);
+  await assert.rejects(() => hidden.core.read_raw(hidden.designer, 'img/mark.svg'), (err) => err instanceof NotFound);
+  await assert.rejects(() => hidden.core.get_box(hidden.designer, 'source', { dir: 'img' }), (err) => err instanceof NotFound);
+  assert.equal((await hidden.core.get_file(hidden.owner, 'img/mark.svg')).kind, 'text');
+  assert.equal((await hidden.core.read_raw(hidden.owner, 'img/mark.svg')).contentType, 'text/plain; charset=utf-8');
+  assert.deepEqual((await hidden.core.get_box(hidden.owner, 'source', { dir: 'img' })).files.map((f) => f.name), ['mark.svg']);
+
+  const listed = rawConfig(repo.url);
+  listed.docs = { public_extensions: ['svg'] };
+  const shown = await makeInstance({ raw: listed });
+  const file = await shown.core.get_file(shown.designer, 'img/mark.svg');
+  assert.equal(file.kind, 'text');
+  assert.match(file.text, /<svg>mark<\/svg>/);
+  const raw = await shown.core.read_raw(shown.designer, 'img/mark.svg');
+  assert.equal(raw.contentType, 'text/plain; charset=utf-8');
+  assert.deepEqual((await shown.core.get_box(shown.designer, 'source', { dir: 'img' })).files.map((f) => f.name), ['mark.svg']);
 });
 
 test('an extension listed in docs.public_extensions stays visible to a role without owner', async () => {
