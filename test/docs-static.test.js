@@ -5,7 +5,7 @@ import http from 'node:http';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { makeApp, client, PW, makeSourceRepo, sampleRawConfig } from './helpers.js';
+import { makeApp, client, PW, PNG, makeSourceRepo, sampleRawConfig } from './helpers.js';
 import { readDocsFile, resolveDocsDir, cacheControlFor, isHiddenDocsPath } from '../src/docs-static.js';
 import { validateConfig } from '../src/config.js';
 import { safeRepoPath } from '../src/util.js';
@@ -223,6 +223,32 @@ test('a dot segment is rejected the same way as a parent segment', async () => {
     const got = await rawReq(A.base, p, { cookie });
     assert.equal(got.status, traversal.status, p);
     assert.equal(got.text.includes('Static page'), false, p);
+  }
+});
+
+test('an svg under /docs is text/plain and a png stays image/png', async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'bteam-docs-types-'));
+  const svg = '<svg>mark</svg>\n';
+  fs.writeFileSync(path.join(dir, 'mark.svg'), svg);
+  fs.writeFileSync(path.join(dir, 'mark.SVG'), svg);
+  fs.writeFileSync(path.join(dir, 'x.png.svg'), svg);
+  fs.writeFileSync(path.join(dir, 'pixel.png'), PNG);
+  const app = await makeApp({ handlerOptions: { docsDir: dir } });
+  try {
+    const c = client(app.base);
+    assert.equal((await c.login('owner', PW.owner)).status, 303);
+    for (const name of ['mark.svg', 'mark.SVG', 'x.png.svg']) {
+      const r = await c.get(`docs/${name}`);
+      assert.equal(r.status, 200, name);
+      assert.match(r.headers.get('content-type'), /^text\/plain(?:;\s*charset=utf-8)?$/i, name);
+      assert.equal(r.headers.get('x-content-type-options'), 'nosniff', name);
+      assert.match(r.text, /<svg/, name);
+    }
+    const png = await c.get('docs/pixel.png');
+    assert.equal(png.status, 200);
+    assert.equal(png.headers.get('content-type'), 'image/png');
+  } finally {
+    app.close();
   }
 });
 
