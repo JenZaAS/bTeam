@@ -144,13 +144,16 @@ test('dot and parent segments in the request path are rejected before routing', 
     '/docs/.%2e/',
     '/docs/%2e./',
     '/docs/guide/../index.html',
+    '/docs/..\\secret',
     '/raw/../',
+    '/raw/..\\secret',
     '/raw/%2e%2e/',
     '/raw/%2E%2e',
     '/file/../',
     '/file/%2e%2e/',
     '/file/%2e/',
     '/file/.%2E/',
+    '/file/..\\secret',
   ];
   for (const p of cases) {
     const anon = await rawReq(A.base, p);
@@ -182,6 +185,9 @@ test('dot and parent segments in the request path are rejected before routing', 
   assert.equal(hasRelativeHop('/docs/index.html'), false);
   assert.equal(hasRelativeHop('/docs/%2e%2e/'), true);
   assert.equal(hasRelativeHop('/file/%2E%2e'), true);
+  assert.equal(hasRelativeHop('/docs/..\\secret'), true);
+  assert.equal(hasRelativeHop('/raw/..\\secret'), true);
+  assert.equal(hasRelativeHop('/file/..\\secret'), true);
   const normalized = readDocsFile(fixture, '/docs/index.html', '/docs/guide/../index.html');
   assert.equal(normalized.error, 'bad');
   const dotted = readDocsFile(fixture, '/docs/', '/docs/./');

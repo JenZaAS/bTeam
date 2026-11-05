@@ -58,17 +58,20 @@ function decodePathSegment(s) {
   return cur;
 }
 
+function splitPathSegments(value) {
+  return String(value).split(/[/\\]/);
+}
+
 /**
  * True when the raw request path (query stripped) has a "." or ".." segment,
  * including percent-encoded and mixed-case forms such as %2e, %2E, and .%2e.
+ * Both the raw path and each decoded segment are split on "/" and "\".
  */
 export function hasRelativeHop(rawPath) {
   const pathOnly = String(rawPath ?? '').split('?')[0].split('#')[0];
-  for (const part of pathOnly.split('/')) {
+  for (const part of splitPathSegments(pathOnly)) {
     if (part === '.' || part === '..') return true;
-    const decoded = decodePathSegment(part);
-    if (decoded === '.' || decoded === '..') return true;
-    if (decoded !== part && decoded.split(/[/\\]/).some((s) => s === '.' || s === '..')) return true;
+    if (splitPathSegments(decodePathSegment(part)).some((s) => s === '.' || s === '..')) return true;
   }
   return false;
 }
