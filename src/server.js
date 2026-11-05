@@ -13,7 +13,7 @@ import { parseCookies, serializeCookie, readForm, BodyError, clientAddress, isLo
 import { randomToken, safeEqual } from './auth.js';
 import { WorkshopError } from './workshop.js';
 import { InboxError } from './inbox.js';
-import { escapeHtml as e, safeRepoPath } from './util.js';
+import { escapeHtml as e, safeRepoPath, hasRelativeHop } from './util.js';
 import { localized } from './config.js';
 import { readDocsFile, cacheControlFor } from './docs-static.js';
 
@@ -52,14 +52,20 @@ export function createHandler({ core, auth, workshop = null, inbox = null, theme
   const workshopOn = Boolean(workshop && config.workshop.enabled);
   const inboxOn = Boolean(inbox && config.inbox.enabled);
 
-  const csp = [
-    "default-src 'none'",
-    "img-src 'self'",
-    "style-src 'self'",
-    "form-action 'self'",
-    "base-uri 'none'",
-    `frame-ancestors ${web.frameAncestors.join(' ')}`,
-  ].join('; ');
+  const cspFor = (docs) => {
+    const parts = ["default-src 'none'"];
+    if (docs) parts.push("script-src 'self'", "connect-src 'self'", "worker-src 'self'");
+    parts.push(
+      "img-src 'self'",
+      "style-src 'self'",
+      docs ? "form-action 'none'" : "form-action 'self'",
+      "base-uri 'none'",
+      `frame-ancestors ${web.frameAncestors.join(' ')}`,
+    );
+    return parts.join('; ');
+  };
+  const csp = cspFor(false);
+  const docsCsp = cspFor(true);
 
   function send(res, status, type, body, extra = {}) {
     res.writeHead(status, {
@@ -88,14 +94,16 @@ export function createHandler({ core, auth, workshop = null, inbox = null, theme
 
   return async function handler(req, res) {
     const isPost = req.method === 'POST';
-    const rawPath = String(req.url ?? '').split('?')[0];
+    const rawUrl = String(req.url ?? '');
+    const rawPath = rawUrl.split('?')[0];
     const docsRequest = rawPath === '/docs' || rawPath.startsWith('/docs/') || rawPath.startsWith('/docs%');
+    const docsHeaders = () => (docsRequest ? { 'X-Robots-Tag': 'noindex', 'Cache-Control': 'private, no-store', 'Content-Security-Policy': docsCsp } : {});
+    // "." and ".." segments, including %2e / %2E, are rejected on the raw path
+    // before URL normalisation can turn them into another route.
+    if (hasRelativeHop(rawPath)) return send(res, 400, 'text/plain; charset=utf-8', 'bad request', docsHeaders());
     if (!isPost && req.method !== 'GET' && req.method !== 'HEAD') {
       const extra = { Allow: 'GET, HEAD, POST' };
-      if (docsRequest) {
-        extra['X-Robots-Tag'] = 'noindex';
-        extra['Cache-Control'] = 'private, no-store';
-      }
+      if (docsRequest) Object.assign(extra, docsHeaders());
       return send(res, 405, 'text/plain; charset=utf-8', 'method not allowed', extra);
     }
     let url;
@@ -121,6 +129,10 @@ export function createHandler({ core, auth, workshop = null, inbox = null, theme
       }
     }
 
+    if ((path === '/raw' || path === '/file') && hasRelativeHop(params.path ?? '')) {
+      return send(res, 400, 'text/plain; charset=utf-8', 'bad request');
+    }
+
     const who = identify(req, cookies);
     const publicStatus = { instance: { title: config.instance.title }, source: {} };
 
@@ -141,17 +153,16 @@ export function createHandler({ core, auth, workshop = null, inbox = null, theme
       return handleLogin(req, res, t, locale, cookies, publicStatus);
     }
     if (!who) {
-      const docsHeaders = docsRequest ? { 'X-Robots-Tag': 'noindex', 'Cache-Control': 'private, no-store' } : {};
-      if (path.startsWith('/api/')) return send(res, 401, 'application/json; charset=utf-8', JSON.stringify({ error: 'login required' }), docsHeaders);
-      if (isPost) return redirect(res, 'login?expired=1', [], docsHeaders);
+      if (path.startsWith('/api/')) return send(res, 401, 'application/json; charset=utf-8', JSON.stringify({ error: 'login required' }), docsHeaders());
+      if (isPost) return redirect(res, 'login?expired=1', [], docsHeaders());
       const next = path === '/' ? '' : `${path.slice(1)}${url.search}`;
-      return redirect(res, next ? `login?next=${encodeURIComponent(safeNext(next))}` : 'login', [], docsHeaders);
+      return redirect(res, next ? `login?next=${encodeURIComponent(safeNext(next))}` : 'login', [], docsHeaders());
     }
 
     // Use the raw path so ".." and encoded dots are still visible after URL parsing.
     if (docsRequest) {
       if (req.method !== 'GET' && req.method !== 'HEAD') {
-        return send(res, 405, 'text/plain; charset=utf-8', 'method not allowed', { Allow: 'GET, HEAD', 'X-Robots-Tag': 'noindex', 'Cache-Control': 'private, no-store' });
+        return send(res, 405, 'text/plain; charset=utf-8', 'method not allowed', { Allow: 'GET, HEAD', ...docsHeaders() });
       }
       return serveDocs(req, res, path, rawPath);
     }
@@ -257,7 +268,7 @@ export function createHandler({ core, auth, workshop = null, inbox = null, theme
 
   function serveDocs(req, res, path, rawPath) {
     const file = readDocsFile(docsDir, path, rawPath, { hidePaths: config.docs?.hidePaths ?? [] });
-    const robots = { 'X-Robots-Tag': 'noindex' };
+    const robots = { 'X-Robots-Tag': 'noindex', 'Content-Security-Policy': docsCsp };
     if (file.error === 'bad') return send(res, 400, 'text/plain; charset=utf-8', 'bad request', { ...robots, 'Cache-Control': 'private, no-store' });
     if (file.error) return send(res, 404, 'text/plain; charset=utf-8', 'not found', { ...robots, 'Cache-Control': 'private, no-store' });
     const body = req.method === 'HEAD' ? '' : file.body;

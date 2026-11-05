@@ -8,7 +8,7 @@ import { fileURLToPath } from 'node:url';
 import { makeApp, client, PW, PNG, makeSourceRepo, sampleRawConfig } from './helpers.js';
 import { readDocsFile, resolveDocsDir, cacheControlFor, isHiddenDocsPath } from '../src/docs-static.js';
 import { validateConfig } from '../src/config.js';
-import { safeRepoPath } from '../src/util.js';
+import { safeRepoPath, hasRelativeHop } from '../src/util.js';
 
 const fixture = path.resolve(path.dirname(fileURLToPath(import.meta.url)), 'fixtures/docs-site');
 const refused = (status) => status === 401 || status === 303;
@@ -75,6 +75,11 @@ test('a signed-in request gets the file and the cache headers', async () => {
   assert.equal(page.headers.get('content-type'), 'text/html; charset=utf-8');
   assert.equal(page.headers.get('cache-control'), 'private, no-store');
   assert.equal(page.headers.get('x-robots-tag'), 'noindex');
+  assert.equal(page.headers.get('x-content-type-options'), 'nosniff');
+  assert.equal(
+    page.headers.get('content-security-policy'),
+    "default-src 'none'; script-src 'self'; connect-src 'self'; worker-src 'self'; img-src 'self'; style-src 'self'; form-action 'none'; base-uri 'none'; frame-ancestors 'self'",
+  );
 
   const slash = await owner.get('docs/');
   assert.equal(slash.status, 200);
@@ -125,6 +130,68 @@ test('path escapes are refused', async () => {
     assert.equal(r.text.includes('Static page'), false);
     assert.equal(r.headers['x-robots-tag'], 'noindex');
   }
+});
+
+test('dot and parent segments in the request path are rejected before routing', async () => {
+  const cookie = [...owner.jar].map(([k, v]) => `${k}=${v}`).join('; ');
+  const cases = [
+    '/docs/../',
+    '/docs/..',
+    '/docs/%2e%2e/',
+    '/docs/%2E%2E/',
+    '/docs/./',
+    '/docs/%2e/',
+    '/docs/.%2e/',
+    '/docs/%2e./',
+    '/docs/guide/../index.html',
+    '/docs/..\\secret',
+    '/raw/../',
+    '/raw/..\\secret',
+    '/raw/%2e%2e/',
+    '/raw/%2E%2e',
+    '/file/../',
+    '/file/%2e%2e/',
+    '/file/%2e/',
+    '/file/.%2E/',
+    '/file/..\\secret',
+  ];
+  for (const p of cases) {
+    const anon = await rawReq(A.base, p);
+    assert.equal(anon.status, 400, `anon ${p}`);
+    assert.equal(anon.text.includes('Static page'), false, p);
+    assert.equal(anon.text.includes('<nav'), false, p);
+    const signed = await rawReq(A.base, p, { cookie });
+    assert.equal(signed.status, 400, `signed ${p}`);
+    assert.equal(signed.text.includes('Static page'), false, p);
+    assert.equal(signed.text.includes('<nav'), false, p);
+  }
+  for (const p of ['/docs/../', '/docs/%2e%2e/', '/docs/%2E%2E/']) {
+    const r = await rawReq(A.base, p, { cookie });
+    assert.equal(r.headers['x-content-type-options'], 'nosniff', p);
+    assert.match(r.headers['cache-control'], /no-store/, p);
+    assert.match(r.headers['content-security-policy'], /script-src 'self'/);
+    assert.match(r.headers['content-security-policy'], /connect-src 'self'/);
+    assert.match(r.headers['content-security-policy'], /worker-src 'self'/);
+    assert.match(r.headers['content-security-policy'], /img-src 'self'/);
+    assert.equal(/img-src[^;]*data:/.test(r.headers['content-security-policy']), false);
+  }
+  const rawHop = await rawReq(A.base, '/raw?path=..%2Fx');
+  const rawEncoded = await rawReq(A.base, '/raw?path=%2e%2e%2Fx', { cookie });
+  const rawUpper = await rawReq(A.base, '/raw?path=%2E%2E%2Fsecret%2F.env');
+  const fileDot = await rawReq(A.base, '/file?path=.');
+  const fileEncoded = await rawReq(A.base, '/file?path=%2e%2e%2Fx', { cookie });
+  for (const r of [rawHop, rawEncoded, rawUpper, fileDot, fileEncoded]) assert.equal(r.status, 400);
+  assert.equal((await rawReq(A.base, '/raw?path=secret%2F.env', { cookie })).status, 404);
+  assert.equal(hasRelativeHop('/docs/index.html'), false);
+  assert.equal(hasRelativeHop('/docs/%2e%2e/'), true);
+  assert.equal(hasRelativeHop('/file/%2E%2e'), true);
+  assert.equal(hasRelativeHop('/docs/..\\secret'), true);
+  assert.equal(hasRelativeHop('/raw/..\\secret'), true);
+  assert.equal(hasRelativeHop('/file/..\\secret'), true);
+  const normalized = readDocsFile(fixture, '/docs/index.html', '/docs/guide/../index.html');
+  assert.equal(normalized.error, 'bad');
+  const dotted = readDocsFile(fixture, '/docs/', '/docs/./');
+  assert.equal(dotted.error, 'bad');
 });
 
 test('readDocsFile rejects crafted relative paths', () => {

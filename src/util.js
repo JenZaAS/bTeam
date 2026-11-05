@@ -40,6 +40,42 @@ export function hasDotSegment(p) {
   return String(p).split('/').some((s) => s.startsWith('.'));
 }
 
+/** Percent-decode a segment a few times. Stops on malformed escapes. */
+function decodePathSegment(s) {
+  let cur = String(s);
+  for (let i = 0; i < 4; i++) {
+    if (!/%[0-9a-fA-F]{2}/.test(cur)) break;
+    try {
+      const next = decodeURIComponent(cur);
+      if (next === cur) break;
+      cur = next;
+    } catch {
+      const next = cur.replace(/%2e/ig, '.');
+      if (next === cur) break;
+      cur = next;
+    }
+  }
+  return cur;
+}
+
+function splitPathSegments(value) {
+  return String(value).split(/[/\\]/);
+}
+
+/**
+ * True when the raw request path (query stripped) has a "." or ".." segment,
+ * including percent-encoded and mixed-case forms such as %2e, %2E, and .%2e.
+ * Both the raw path and each decoded segment are split on "/" and "\".
+ */
+export function hasRelativeHop(rawPath) {
+  const pathOnly = String(rawPath ?? '').split('?')[0].split('#')[0];
+  for (const part of splitPathSegments(pathOnly)) {
+    if (part === '.' || part === '..') return true;
+    if (splitPathSegments(decodePathSegment(part)).some((s) => s === '.' || s === '..')) return true;
+  }
+  return false;
+}
+
 /** Validate a repository-relative path coming from a request. */
 export function safeRepoPath(p) {
   if (typeof p !== 'string' || p.length === 0 || p.length > 1024) return null;
