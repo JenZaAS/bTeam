@@ -91,7 +91,7 @@ export function sampleRawConfig(url) {
     ],
     issue_source: { type: 'github', repo: 'example-org/example-project', token_env: 'TEST_ISSUES_TOKEN' },
     roles: {
-      owner: {},
+      owner: { audiences: ['all', 'owner'] },
       designer: {
         hide: { issue_labels: ['security', 'sev:*'], issue_title_patterns: ['^security\\b'], paths: ['docs/secret-*.md'] },
         policy: { auto_accept_eligible: ['ui'], route_other_to: 'owner' },

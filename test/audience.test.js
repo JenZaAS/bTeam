@@ -116,9 +116,7 @@ test('audience all is allowed', async () => {
   const raw = await owner.get('raw?path=docs%2Fpublic.md');
   assert.equal(raw.status, 200);
   assert.match(raw.text, /Hello from the public note/);
-  const source = await app.core.get_file(app.owner, 'src/app.js');
-  assert.equal(source.kind, 'text');
-  assert.match(source.text, /console.log/);
+  await assert.rejects(() => app.core.get_file(app.owner, 'src/app.js'), (err) => err instanceof NotFound);
 });
 
 test('a role audience list allows that value for the signed-in user', async () => {

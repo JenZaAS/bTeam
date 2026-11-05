@@ -176,7 +176,7 @@ async function main() {
       const h = r.hide;
       console.log(`role ${r.name}: audiences [${r.audiences.join(', ')}]; hides boxes [${h.boxes}], paths [${h.paths}], issue labels [${h.issueLabels}], ${h.issueTitlePatterns.length} title pattern(s)${Object.keys(r.policy).length ? `; policy ${JSON.stringify(r.policy)}` : ''}`);
     }
-    console.log(`docs: ${c.docs.dir ?? 'off'}; hide prefixes [${c.docs.hidePaths.join(', ')}]`);
+    console.log(`docs: ${c.docs.dir ?? 'off'}; hide prefixes [${c.docs.hidePaths.join(', ')}]; public extensions [${c.docs.publicExtensions.join(', ')}]`);
     const a = c.auth;
     console.log(`auth: session idle ${a.sessionIdleMs / 60000}m, max ${a.sessionMaxMs / 3600000}h, lock after ${a.maxFailures} failures for ${a.lockoutMs / 60000}m; cookies ${c.web.secureCookies ? 'Secure' : 'NOT Secure (loopback only)'}, SameSite=${c.web.sameSite}`);
     console.log(`workshop: ${c.workshop.enabled ? 'on' : 'off'}; inbox: ${c.inbox.enabled ? 'on' : 'off'}${c.inbox.ownerQuestionLabel ? ` (owner label "${c.inbox.ownerQuestionLabel}")` : ''}`);
