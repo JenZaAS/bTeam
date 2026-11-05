@@ -5,10 +5,10 @@ import http from 'node:http';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { makeApp, client, PW } from './helpers.js';
-import { readDocsFile, resolveDocsDir, cacheControlFor } from '../src/docs-static.js';
+import { makeApp, client, PW, makeSourceRepo, sampleRawConfig } from './helpers.js';
+import { readDocsFile, resolveDocsDir, cacheControlFor, isHiddenDocsPath } from '../src/docs-static.js';
 import { validateConfig } from '../src/config.js';
-import { sampleRawConfig } from './helpers.js';
+import { safeRepoPath } from '../src/util.js';
 
 const fixture = path.resolve(path.dirname(fileURLToPath(import.meta.url)), 'fixtures/docs-site');
 const refused = (status) => status === 401 || status === 303;
@@ -173,6 +173,56 @@ test('an unset or missing directory answers 404 and the app still starts', async
     assert.equal((await c.get('docs/')).status, 404);
   } finally {
     gone.close();
+  }
+});
+
+test('a hidden path gives 404', async () => {
+  const hidden = readDocsFile(fixture, '/docs/guide/index.html', '/docs/guide/index.html', { hidePaths: ['guide'] });
+  assert.equal(hidden.error, 'missing');
+  const home = readDocsFile(fixture, '/docs/index.html', '/docs/index.html', { hidePaths: ['guide'] });
+  assert.match(home.body.toString('utf8'), /Static page/);
+  assert.equal(isHiddenDocsPath('guide/index.html', ['guide']), true);
+  assert.equal(isHiddenDocsPath('guideline/index.html', ['guide']), false);
+
+  const src = makeSourceRepo();
+  const raw = sampleRawConfig(src.url);
+  raw.docs = { hide_paths: ['/guide/'] };
+  const app = await makeApp({ raw, handlerOptions: { docsDir: fixture } });
+  try {
+    const c = client(app.base);
+    assert.equal((await c.login('owner', PW.owner)).status, 303);
+    const guide = await c.get('docs/guide/');
+    assert.equal(guide.status, 404);
+    assert.equal(guide.text.includes('Guide page'), false);
+    assert.equal((await c.get('docs/guide/index.html')).status, 404);
+    const page = await c.get('docs/index.html');
+    assert.equal(page.status, 200);
+    assert.match(page.text, /Static page/);
+  } finally {
+    app.close();
+  }
+});
+
+test('a dot segment is rejected the same way as a parent segment', async () => {
+  const parent = readDocsFile(fixture, '/docs/guide/../index.html', '/docs/guide/../index.html');
+  assert.equal(parent.error, 'bad');
+  for (const p of ['/docs/.env', '/docs/.git/HEAD', '/docs/.well-known/security.txt', '/docs/guide/.hidden']) {
+    const got = readDocsFile(fixture, p, p);
+    assert.equal(got.error, parent.error, p);
+  }
+  assert.equal(safeRepoPath('docs/.env'), null);
+  assert.equal(safeRepoPath('.git/config'), null);
+  assert.equal(safeRepoPath('docs/.well-known/a'), null);
+  assert.equal(safeRepoPath('../x'), null);
+  assert.equal(safeRepoPath('docs/guide.md'), 'docs/guide.md');
+
+  const cookie = [...owner.jar].map(([k, v]) => `${k}=${v}`).join('; ');
+  const traversal = await rawReq(A.base, 'docs/../package.json', { cookie });
+  assert.equal(traversal.status, 400);
+  for (const p of ['docs/.env', 'docs/.git/config', 'docs/guide/.well-known']) {
+    const got = await rawReq(A.base, p, { cookie });
+    assert.equal(got.status, traversal.status, p);
+    assert.equal(got.text.includes('Static page'), false, p);
   }
 });
 

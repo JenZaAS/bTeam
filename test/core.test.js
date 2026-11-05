@@ -119,7 +119,7 @@ test('search finds documents with snippets', async () => {
 });
 
 test('mirror picks up new commits on the next sync', async () => {
-  I.src.commit('digest/2026-01-03.md', '# Digest 3 Jan\n');
+  I.src.commit('digest/2026-01-03.md', '---\naudience: all\n---\n# Digest 3 Jan\n');
   const before = I.mirror.commit;
   await I.mirror.sync();
   assert.notEqual(I.mirror.commit, before);

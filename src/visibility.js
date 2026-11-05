@@ -7,9 +7,14 @@ export function createViewer(config, roleName) {
   if (!role) throw new Error(`unknown role "${roleName}"`);
   const hiddenPath = globMatcher(role.hide.paths);
   const hiddenLabel = labelMatcher(role.hide.issueLabels);
+  const audiences = Array.isArray(role.audiences) ? role.audiences : ['all'];
   return {
     role: role.name,
     policy: role.policy,
+    audiences,
+    canSeeAudience(value) {
+      return typeof value === 'string' && value.length > 0 && audiences.includes(value);
+    },
     canSeeBox(box) {
       if (role.hide.boxes.includes(box.id)) return false;
       return !box.visibleTo.length || box.visibleTo.includes(role.name);

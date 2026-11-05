@@ -20,6 +20,17 @@ export function splitFrontMatter(text) {
   return { data, body: text.slice(m[0].length) };
 }
 
+/**
+ * The audience value from front matter, or "" when it is missing, blank, or not a string.
+ * Matching is exact after trimming.
+ */
+export function audienceValue(data) {
+  if (!data || typeof data !== 'object') return '';
+  const value = data.audience;
+  if (typeof value !== 'string') return '';
+  return value.trim();
+}
+
 export function slugify(text) {
   return (
     String(text)

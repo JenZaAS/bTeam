@@ -171,10 +171,12 @@ async function main() {
     console.log(`ok: instance "${c.instance.id}" (${c.instance.title})`);
     console.log(`source: ${c.source.url.replace(/\/\/[^/]*@/, '//')} @ ${c.source.branch}, refresh ${c.source.refreshMs / 1000}s${c.source.tokenEnv ? `, token from $${c.source.tokenEnv}` : ''}`);
     console.log(`boxes: ${c.boxes.map((b) => `${b.id}(${b.type})`).join(', ')}`);
+    console.log(`audiences: [${c.audiences.join(', ')}]`);
     for (const r of Object.values(c.roles)) {
       const h = r.hide;
-      console.log(`role ${r.name}: hides boxes [${h.boxes}], paths [${h.paths}], issue labels [${h.issueLabels}], ${h.issueTitlePatterns.length} title pattern(s)${Object.keys(r.policy).length ? `; policy ${JSON.stringify(r.policy)}` : ''}`);
+      console.log(`role ${r.name}: audiences [${r.audiences.join(', ')}]; hides boxes [${h.boxes}], paths [${h.paths}], issue labels [${h.issueLabels}], ${h.issueTitlePatterns.length} title pattern(s)${Object.keys(r.policy).length ? `; policy ${JSON.stringify(r.policy)}` : ''}`);
     }
+    console.log(`docs: ${c.docs.dir ?? 'off'}; hide prefixes [${c.docs.hidePaths.join(', ')}]`);
     const a = c.auth;
     console.log(`auth: session idle ${a.sessionIdleMs / 60000}m, max ${a.sessionMaxMs / 3600000}h, lock after ${a.maxFailures} failures for ${a.lockoutMs / 60000}m; cookies ${c.web.secureCookies ? 'Secure' : 'NOT Secure (loopback only)'}, SameSite=${c.web.sameSite}`);
     console.log(`workshop: ${c.workshop.enabled ? 'on' : 'off'}; inbox: ${c.inbox.enabled ? 'on' : 'off'}${c.inbox.ownerQuestionLabel ? ` (owner label "${c.inbox.ownerQuestionLabel}")` : ''}`);

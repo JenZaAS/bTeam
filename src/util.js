@@ -35,12 +35,17 @@ export function labelMatcher(patterns) {
   return (label) => fn(String(label).toLowerCase());
 }
 
+/** True when any slash-separated segment starts with "." ("..", ".env", ".git", ".well-known"). */
+export function hasDotSegment(p) {
+  return String(p).split('/').some((s) => s.startsWith('.'));
+}
+
 /** Validate a repository-relative path coming from a request. */
 export function safeRepoPath(p) {
   if (typeof p !== 'string' || p.length === 0 || p.length > 1024) return null;
   if (p.includes('\0') || p.includes('\\') || p.startsWith('/')) return null;
   const parts = p.split('/');
-  if (parts.some((s) => s === '' || s === '.' || s === '..')) return null;
+  if (parts.some((s) => s === '' || s.startsWith('.'))) return null;
   return p;
 }
 

@@ -2,6 +2,7 @@
 // A missing directory is a 404, not a startup failure.
 import fs from 'node:fs';
 import path from 'node:path';
+import { hasDotSegment } from './util.js';
 
 const TYPES = {
   '.html': 'text/html; charset=utf-8',
@@ -48,12 +49,29 @@ export function resolveDocsDir(config, env = {}) {
   return path.resolve(raw);
 }
 
+/** True when rel is exactly a configured prefix, or a path under that prefix. */
+export function isHiddenDocsPath(rel, hidePaths) {
+  if (!hidePaths?.length) return false;
+  const norm = String(rel).replace(/^\/+/, '');
+  const forms = new Set([norm]);
+  if (norm.endsWith('/index.html')) forms.add(norm.slice(0, -'/index.html'.length));
+  for (const raw of hidePaths) {
+    const prefix = String(raw).replace(/^\/+/, '').replace(/\/+$/, '');
+    if (!prefix) continue;
+    for (const form of forms) {
+      if (form === prefix || form.startsWith(`${prefix}/`)) return true;
+    }
+  }
+  return false;
+}
+
 /**
  * Read one file under root for a /docs pathname.
  * pathname is the URL parser's decoded path. rawPath is the request path before that decode.
+ * hidePaths are prefixes under /docs that answer as missing.
  * Returns { body, type, rel } or { error: 'bad' | 'missing' | 'off' }.
  */
-export function readDocsFile(root, pathname, rawPath = pathname) {
+export function readDocsFile(root, pathname, rawPath = pathname, { hidePaths = [] } = {}) {
   if (!root) return { error: 'off' };
   if (pathname !== '/docs' && !pathname.startsWith('/docs/')) return { error: 'bad' };
   if (/%2e|%2f|%5c/i.test(rawPath) || rawPath.includes('\\') || rawPath.includes('\0')) return { error: 'bad' };
@@ -63,7 +81,8 @@ export function readDocsFile(root, pathname, rawPath = pathname) {
   if (rel.includes('\\') || rel.includes('\0') || rel.includes('%')) return { error: 'bad' };
   if (rel === '' || rel.endsWith('/')) rel += 'index.html';
   const parts = rel.split('/');
-  if (parts.some((p) => p === '' || p === '.' || p === '..')) return { error: 'bad' };
+  if (parts.some((p) => p === '') || hasDotSegment(rel)) return { error: 'bad' };
+  if (isHiddenDocsPath(rel, hidePaths)) return { error: 'missing' };
 
   let rootReal;
   try {
