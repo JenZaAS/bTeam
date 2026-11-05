@@ -2,7 +2,7 @@
 // A missing directory is a 404, not a startup failure.
 import fs from 'node:fs';
 import path from 'node:path';
-import { hasDotSegment } from './util.js';
+import { hasDotSegment, hasRelativeHop } from './util.js';
 
 const TYPES = {
   '.html': 'text/html; charset=utf-8',
@@ -74,7 +74,7 @@ export function isHiddenDocsPath(rel, hidePaths) {
 export function readDocsFile(root, pathname, rawPath = pathname, { hidePaths = [] } = {}) {
   if (!root) return { error: 'off' };
   if (pathname !== '/docs' && !pathname.startsWith('/docs/')) return { error: 'bad' };
-  if (/%2e|%2f|%5c/i.test(rawPath) || rawPath.includes('\\') || rawPath.includes('\0')) return { error: 'bad' };
+  if (hasRelativeHop(rawPath) || /%2e|%2f|%5c/i.test(rawPath) || rawPath.includes('\\') || rawPath.includes('\0')) return { error: 'bad' };
 
   let rel = pathname.slice('/docs'.length);
   if (rel.startsWith('/')) rel = rel.slice(1);
