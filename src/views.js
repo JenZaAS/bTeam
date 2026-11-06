@@ -56,9 +56,13 @@ ${user?.dev ? `<p class="bt-warn bt-dev">${e(t.devOverride)}</p>` : ''}
 ${flash ? `<p class="bt-flash" role="status">${e(flash)}</p>` : ''}
 ${body}
 </main>
-<footer class="bt-footer"><span>${user ? `<a class="bt-nav-more" href="advanced">${e(t.more)}</a>` : ''}</span>${
+<footer class="bt-footer"><span>${user ? `<a class="bt-nav-more" href="advanced">${e(t.more)}</a>` : ''}${
+    currentBox === '' && user && status.links?.length
+      ? status.links.map((l) => ` <a class="bt-ext" href="${e(l.url)}" rel="noopener noreferrer">${e(l.label)}</a>`).join('')
+      : ''
+  }</span>${
     user
-      ? `<span>${e(t.signedInAs)} <code>${e(user.id)}</code> (${e(t.role)}: <code>${e(user.role)}</code>)${
+      ? `<span>${e(t.signedInAs)} ${currentBox === '' ? e(user.id) : `<code>${e(user.id)}</code>`} (${e(t.role)}: ${currentBox === '' ? e(user.role) : `<code>${e(user.role)}</code>`})${
           user.dev ? '' : ` <form class="bt-logout" action="logout" method="post"><input type="hidden" name="csrf" value="${e(user.csrf)}"><button type="submit">${e(t.logout)}</button></form>`
         }</span>`
       : ''
@@ -84,19 +88,109 @@ function issueItems(t, list) {
     .join('')}</ul>`;
 }
 
-export function homeView({ t, locale, primaryBoxes, status }) {
-  const cards = primaryBoxes
-    .map(
-      (b) => `<li class="bt-card"><a href="box?id=${q(b.id)}"><strong>${e(localized(b.title, locale))}</strong></a>${
-        b.description ? `<p>${e(localized(b.description, locale))}</p>` : ''
-      }</li>`,
-    )
-    .join('');
-  const links = status.links.length
-    ? `<section><h2>${e(t.links)}</h2><ul>${status.links.map((l) => `<li><a href="${e(l.url)}" rel="noopener noreferrer">${e(l.label)}</a></li>`).join('')}</ul></section>`
-    : '';
-  const err = status.source.error ? `<p class="bt-warn">${e(status.source.error)}</p>` : '';
-  return `<h1>${e(t.home)}</h1>${err}<ul class="bt-cards">${cards}</ul>${links}`;
+function plainText(html) {
+  return String(html)
+    .replace(/<script[\s\S]*?<\/script>/gi, ' ')
+    .replace(/<style[\s\S]*?<\/style>/gi, ' ')
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/&nbsp;/g, ' ')
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;|&apos;/g, "'")
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+/**
+ * Items for one Overview teaser. An empty list means the teaser is left out.
+ * Decision records only: a box fallback section is never a teaser.
+ */
+export function teaserItems(kind, data, max = 3) {
+  const limit = Number.isInteger(max) && max > 0 ? max : 3;
+  if (kind === 'decisions') {
+    return (data?.entries ?? []).slice(0, limit).map((x) => ({
+      label: x.title,
+      href: `doc?path=${q(x.path)}`,
+    }));
+  }
+  if (kind === 'digest') {
+    return (data?.entries ?? []).slice(0, limit).filter((x) => x.title).map((entry, i) => {
+      const item = { label: entry.title, href: `doc?path=${q(entry.path)}` };
+      if (i === 0 && entry.html) {
+        const para = /<p\b[^>]*>([\s\S]*?)<\/p>/i.exec(entry.html);
+        let text = plainText(para ? para[1] : entry.html);
+        if (text.startsWith(entry.title)) text = text.slice(entry.title.length).trim();
+        if (text.length > 180) text = `${text.slice(0, 179).trimEnd()}…`;
+        if (text) item.detail = text;
+      }
+      return item;
+    });
+  }
+  if (kind === 'questions') {
+    const out = [];
+    for (const issue of data?.issues ?? []) {
+      if (out.length >= limit || !issue.title) continue;
+      const href = typeof issue.url === 'string' && /^https:\/\//.test(issue.url) ? issue.url : null;
+      out.push({ label: issue.title, href, external: Boolean(href) });
+    }
+    for (const doc of data?.documents ?? []) {
+      if (out.length >= limit || !doc.title) continue;
+      out.push({ label: doc.title, href: `doc?path=${q(doc.path)}` });
+    }
+    return out;
+  }
+  return [];
+}
+
+function featureLinks(t, features) {
+  const items = [];
+  if (features.docs) items.push(`<a href="docs/">${e(t.docs)}</a>`);
+  if (features.workshop) items.push(`<a href="workshop">${e(t.workshop)}</a>`);
+  if (features.inbox) items.push(`<a href="inbox">${e(t.inbox)}</a>`);
+  if (!items.length) return '';
+  return `<nav class="bt-home-links" aria-label="${e(t.links)}">${items.join('')}</nav>`;
+}
+
+function doorCard(door, locale) {
+  const tag = localized(door.tag, locale);
+  const blurb = localized(door.blurb, locale);
+  return `<li><a class="bt-door" href="${e(door.href)}">${
+    tag ? `<p class="bt-door-tag">${e(tag)}</p>` : ''
+  }<h2>${e(localized(door.label, locale))}</h2>${blurb ? `<p class="bt-door-blurb">${e(blurb)}</p>` : ''}</a></li>`;
+}
+
+function smallLinks(t, links, locale) {
+  if (!links?.length) return '';
+  const inner = links.map((l) => `<a href="${e(l.href)}">${e(localized(l.label, locale))}</a>`).join('');
+  return `<nav class="bt-home-links" aria-label="${e(t.links)}">${inner}</nav>`;
+}
+
+function teaserSection(teasers) {
+  if (!teasers.length) return '';
+  const blocks = teasers.map((teaser) => {
+    const items = teaser.items.map((item) => {
+      const href = item.href || `box?id=${q(teaser.boxId)}`;
+      const rel = item.external ? ' rel="noopener noreferrer"' : '';
+      const detail = item.detail ? `<span class="bt-teaser-detail">${e(item.detail)}</span>` : '';
+      return `<li><a href="${e(href)}"${rel}>${e(item.label)}${detail}</a></li>`;
+    }).join('');
+    return `<article class="bt-teaser"><h2><a href="box?id=${q(teaser.boxId)}">${e(teaser.title)}</a></h2><ul>${items}</ul></article>`;
+  }).join('');
+  return `<section class="bt-teasers">${blocks}</section>`;
+}
+
+/**
+ * Overview. With a home block: one-sentence hero, configured doors, optional small links
+ * and teasers that already have items. Without one: a generic welcome and links to the
+ * features that are turned on. Project wording stays in the instance config.
+ */
+export function homeView({ t, locale, status, home = null, teasers = [], features = {} }) {
+  const err = status?.source?.error ? `<p class="bt-warn">${e(status.source.error)}</p>` : '';
+  if (!home) return `${err}<h1 class="bt-hero">${e(t.homeFallback)}</h1>${featureLinks(t, features)}`;
+  const doors = (home.doors ?? []).map((d) => doorCard(d, locale)).join('');
+  return `${err}<h1 class="bt-hero">${e(localized(home.hero, locale))}</h1><ul class="bt-doors">${doors}</ul>${smallLinks(t, home.links, locale)}${teaserSection(teasers)}`;
 }
 
 /** Mirror commit and sync time, copied from the old signed-in footer. Ignores source and issue errors. */

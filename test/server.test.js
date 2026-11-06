@@ -23,19 +23,25 @@ before(async () => {
 });
 after(() => A.close());
 
-test('home page lists boxes with strict security headers and no scripts', async () => {
+test('home page is a generic entrance, with strict security headers and no scripts', async () => {
   const r = await owner.get('');
   assert.equal(r.status, 200);
   const ids = ['digest', 'decisions', 'now', 'design', 'docs', 'questions', 'issues', 'source'];
   const nav = block(r.text, '<nav', '</nav>');
-  const cards = block(r.text, '<ul class="bt-cards">', '</ul>');
+  const main = block(r.text, '<main', '</main>');
   const footer = block(r.text, '<footer', '</footer>');
   assert.match(nav, /aria-label="Main navigation"/);
   assert.deepEqual(hrefs(nav), ['./', ...ids.map((id) => `box?id=${id}`), 'workshop', 'inbox', 'advanced']);
-  assert.deepEqual(hrefs(cards), ids.map((id) => `box?id=${id}`));
+  assert.ok(!r.text.includes('bt-cards'));
+  assert.ok(!main.includes('box?id='));
+  assert.match(main, /Welcome to this panel/);
+  assert.match(main, /href="workshop"/);
+  assert.match(main, /href="inbox"/);
   assert.ok(!r.text.includes('bt-type'));
   assert.match(footer, /More/);
   assert.match(footer, /href="advanced"/);
+  assert.match(footer, /Signed in as owner/);
+  assert.doesNotMatch(footer, /<code>/);
   assert.ok(!footer.includes(A.mirror.commitInfo.short));
   assert.ok(!footer.includes('Source:'));
   assert.ok(!/<script/i.test(r.text));
@@ -103,7 +109,10 @@ test('JSON tools use the signed-in user\'s role', async () => {
   assert.deepEqual(d.issues.map((i) => i.number), [1, 3]);
   assert.equal((await designer.get('doc?path=docs%2Fsecret-ops.md')).status, 404);
   assert.equal((await owner.get('doc?path=docs%2Fsecret-ops.md')).status, 200);
-  assert.match((await designer.get('')).text, /<code>designer<\/code>/);
+  assert.match((await designer.get('advanced')).text, /<code>designer<\/code>/);
+  const homeFooter = block((await designer.get('')).text, '<footer', '</footer>');
+  assert.match(homeFooter, /Signed in as designer/);
+  assert.doesNotMatch(homeFooter, /<code>/);
 });
 
 test('nothing but login, health and stylesheets is reachable without a session', async () => {

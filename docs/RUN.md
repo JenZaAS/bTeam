@@ -86,9 +86,20 @@ The web server exposes the same tools read-only under `api/<tool>?...` (`status`
 ## Theme (optional)
 `instance.theme` points to a JSON file of tokens, served as CSS custom properties:
 ```json
-{ "tokens": { "bg": "#ffffff", "fg": "#1a1a1a", "accent": "#3355ff", "accent-fg": "#ffffff", "font-body": "system-ui, sans-serif", "radius": "8px" } }
+{ "tokens": { "bg": "#ffffff", "fg": "#1a1a1a", "accent": "#0f766e", "accent-fg": "#ffffff", "font-body": "system-ui, sans-serif", "radius": "8px" } }
 ```
-Allowed tokens: `bg`, `fg`, `muted`, `surface`, `border`, `accent`, `accent-fg`, `link`, `warn`, `font-body`, `font-heading`, `font-mono`, `radius`, `max-width`. Unsafe values are dropped. Without a theme the UI uses the browser's system colours.
+Allowed tokens: `bg`, `fg`, `muted`, `surface`, `border`, `accent`, `accent-fg`, `link`, `warn`, `font-body`, `font-heading`, `font-mono`, `radius`, `max-width`. Unsafe values are dropped. The built-in accent is teal `#0f766e` (a lighter teal in dark mode, for contrast). A theme file replaces any token it sets. There is no theme toggle in the page.
+
+## Entrance (Overview)
+`home:` in `instance.yaml` is the signed-in Overview. See the commented block in `instance.example.yaml`.
+
+- Leave `home:` out and Overview is one generic welcome sentence, plus links to Docs, Workshop and Inbox when those features are on.
+- `hero` is one sentence (a string, or `{en: ..., nb: ...}`).
+- `doors` are the main cards. The whole card is the link. Write the label people should read; do not put the route in the label. `href` is an app path such as `/docs/`, `/workshop` or `box?id=gallery`. A leading `/` is removed so the link still works behind a path prefix.
+- `links` are optional small text links. A design gallery belongs in the nav (`nav: primary`), not as a door. One small link on Overview is enough.
+- `teasers` may list questions, decisions and the digest. Each one is omitted when it has nothing to show. Decisions list decision records only, not a fallback section from another file. `box` must be the id of a box of that type. Hide a box from a role and that role does not get the teaser.
+- The Overview footer does not put the user id in `code`. The mirror commit stays on Advanced.
+- Put project sentences in the private instance file. The app does not ship them.
 
 ## Tests
 ```sh

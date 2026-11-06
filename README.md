@@ -2,7 +2,7 @@
 
 bTeam is a small, self-hosted collaboration panel. It lets a few invited people follow a project and contribute to it without touching its repository.
 
-- **Overview:** it shows a project's digest, decisions, open questions, issues, screenshots and documents. All of these are read **read-only** from a git mirror of the project's repository.
+- **Overview:** a short entrance. With a `home:` block it shows one sentence, the doors you configure, optional small links and teasers that appear only when they have something to show. Without `home:` it is a generic welcome and links to Docs, Workshop and Inbox when those are turned on. Digest, decisions, questions, screenshots and documents stay read-only views of the source repository.
 - **Workshop:** each user has their own editable space where they can sketch ideas, mockups and colour profiles, optionally together with a personal assistant.
 - **Inbox:** users submit contributions. An external agent processes them into issues, digest items or follow-up questions, so users never write to the source repository.
 

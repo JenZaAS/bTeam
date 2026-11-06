@@ -1,5 +1,5 @@
 // Optional per-instance theme tokens (theme.json) -> CSS custom properties.
-// The core ships no colours; without a theme the UI uses the browser's system colours.
+// base.css already sets the shared teal accent (#0f766e). A theme file replaces any token it sets.
 import fs from 'node:fs';
 
 export const THEME_TOKENS = [

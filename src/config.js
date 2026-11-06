@@ -3,7 +3,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import YAML from 'yaml';
-import { parseDuration } from './util.js';
+import { parseDuration, hasRelativeHop } from './util.js';
 
 export const BOX_TYPES = {
   digest: ['path', 'pattern', 'latest'],
@@ -17,8 +17,13 @@ export const BOX_TYPES = {
 const COMMON_BOX_KEYS = ['id', 'type', 'title', 'description', 'visible_to', 'nav', 'order'];
 const TOP_LEVEL_KEYS = [
   'instance', 'source', 'boxes', 'issue_source', 'links', 'roles', 'users', 'viewer', 'web',
-  'auth', 'workshop', 'inbox', 'assistant', 'docs', 'audiences',
+  'auth', 'workshop', 'inbox', 'assistant', 'docs', 'audiences', 'home',
 ];
+const HOME_TEASERS = {
+  questions: { type: 'open-questions', max: 3 },
+  decisions: { type: 'decisions', max: 3 },
+  digest: { type: 'digest', max: 1 },
+};
 const HIDE_KEYS = ['boxes', 'paths', 'issue_labels', 'issue_title_patterns'];
 const ID_RE = /^[a-z0-9][a-z0-9_-]{0,63}$/;
 const ENV_RE = /^[A-Z][A-Z0-9_]{0,127}$/;
@@ -93,6 +98,72 @@ export function validateConfig(raw, { baseDir = process.cwd() } = {}) {
     }
     return out;
   };
+  // App paths stay relative so the UI still works behind a path prefix. A leading slash is removed.
+  const APP_HREF_CTRL = /[\x00-\x1f\x7f]/;
+  const appHref = (v, where) => {
+    if (typeof v !== 'string') {
+      err(`${where} must be a relative app path`);
+      return '';
+    }
+    if (APP_HREF_CTRL.test(v) || v.includes('\u200b') || v.includes('\ufeff')) {
+      err(`${where} must be a relative app path`);
+      return '';
+    }
+    const s = v.trim();
+    const pathOnly = s.split(/[?#]/, 1)[0];
+    if (!s) {
+      err(`${where} must be a relative app path`);
+      return '';
+    }
+    if (hasRelativeHop(pathOnly) || /%2f|%5c/i.test(pathOnly)) {
+      err(`${where} must be a relative app path`);
+      return '';
+    }
+    if (
+      s.length > 300 ||
+      /^[a-z][a-z0-9+.-]*:/i.test(s) ||
+      s.startsWith('//') ||
+      /[\\\s]/.test(s) ||
+      /(^|\/)\.\.(\/|$)/.test(pathOnly)
+    ) {
+      err(`${where} must be a relative app path`);
+      return '';
+    }
+    const stripped = s.replace(/^\/+/, '');
+    if (!stripped || /^[?#]/.test(stripped)) {
+      err(`${where} must be a relative app path`);
+      return '';
+    }
+    return stripped;
+  };
+  const localText = (v, where, { required = false, max = 400, oneSentence = false } = {}) => {
+    if (v === undefined || v === null || v === '') {
+      if (required) err(`${where} is required`);
+      return '';
+    }
+    const check = (text, at) => {
+      if (typeof text !== 'string' || !text.trim()) {
+        err(`${at} must be text`);
+        return;
+      }
+      if (text.length > max || /[\r\n]/.test(text)) err(`${at} must be a single line up to ${max} characters`);
+      else if (oneSentence && text.trim().split(/[.!?]+/u).map((p) => p.trim()).filter(Boolean).length > 1) err(`${at} must be one sentence`);
+    };
+    if (typeof v === 'string') {
+      check(v, where);
+      return v;
+    }
+    if (isObj(v) && Object.keys(v).length && Object.values(v).every((t) => typeof t === 'string')) {
+      for (const [loc, text] of Object.entries(v)) {
+        if (!/^[a-z]{2,3}(-[A-Za-z]{2,4})?$/.test(loc)) err(`${where}: bad locale "${loc}"`);
+        check(text, `${where}.${loc}`);
+      }
+      return v;
+    }
+    err(`${where} must be a string or a {locale: text} mapping`);
+    return '';
+  };
+
   const extensionList = (v, where) => {
     if (v === undefined) return [...DEFAULT_PUBLIC_EXTENSIONS];
     const list = strList(v, where);
@@ -499,6 +570,101 @@ export function validateConfig(raw, { baseDir = process.cwd() } = {}) {
     }
   }
 
+  // Optional Overview entrance. Omitted means a generic welcome, not a grid of boxes.
+  let home = null;
+  if (raw.home !== undefined && raw.home !== null) {
+    const h = raw.home;
+    if (!isObj(h)) err('home must be a mapping');
+    else {
+      unknownKeys(h, ['hero', 'doors', 'links', 'teasers'], 'home');
+      const hero = localText(h.hero, 'home.hero', { required: true, max: 280, oneSentence: true });
+      const doors = [];
+      const doorIds = new Set();
+      if (!Array.isArray(h.doors) || !h.doors.length) err('home.doors must list at least one door');
+      else if (h.doors.length > 4) err('home.doors can list at most 4 doors');
+      else {
+        for (const [i, d] of h.doors.entries()) {
+          const where = `home.doors[${i}]`;
+          if (!isObj(d)) {
+            err(`${where} must be a mapping`);
+            continue;
+          }
+          unknownKeys(d, ['id', 'label', 'href', 'blurb', 'tag'], where);
+          if (!ID_RE.test(String(d.id ?? ''))) err(`${where}.id must be a lowercase slug`);
+          else if (doorIds.has(d.id)) err(`${where}.id "${d.id}" is duplicated`);
+          else doorIds.add(d.id);
+          doors.push({
+            id: d.id,
+            label: localText(d.label, `${where}.label`, { required: true, max: 80 }),
+            href: appHref(d.href, `${where}.href`),
+            blurb: d.blurb === undefined ? '' : localText(d.blurb, `${where}.blurb`, { max: 240 }),
+            tag: d.tag === undefined ? '' : localText(d.tag, `${where}.tag`, { max: 24 }),
+          });
+        }
+      }
+      const homeLinks = [];
+      if (h.links !== undefined) {
+        if (!Array.isArray(h.links)) err('home.links must be a list');
+        else if (h.links.length > 4) err('home.links can list at most 4 links');
+        else {
+          for (const [i, l] of h.links.entries()) {
+            const where = `home.links[${i}]`;
+            if (!isObj(l)) {
+              err(`${where} must be a mapping`);
+              continue;
+            }
+            unknownKeys(l, ['label', 'href'], where);
+            homeLinks.push({
+              label: localText(l.label, `${where}.label`, { required: true, max: 80 }),
+              href: appHref(l.href, `${where}.href`),
+            });
+          }
+        }
+      }
+      const teasers = { questions: null, decisions: null, digest: null };
+      if (h.teasers !== undefined) {
+        if (!isObj(h.teasers)) err('home.teasers must be a mapping');
+        else {
+          unknownKeys(h.teasers, Object.keys(HOME_TEASERS), 'home.teasers');
+          for (const [key, meta] of Object.entries(HOME_TEASERS)) {
+            if (h.teasers[key] === undefined) continue;
+            const spec = h.teasers[key];
+            const where = `home.teasers.${key}`;
+            if (!isObj(spec)) {
+              err(`${where} must be a mapping`);
+              continue;
+            }
+            unknownKeys(spec, ['enabled', 'max', 'box', 'title'], where);
+            let enabled = true;
+            if (spec.enabled !== undefined) {
+              if (typeof spec.enabled !== 'boolean') err(`${where}.enabled must be true or false`);
+              else enabled = spec.enabled;
+            }
+            let max = meta.max;
+            if (spec.max !== undefined) {
+              if (!Number.isInteger(spec.max) || spec.max < 1 || spec.max > 10) err(`${where}.max must be an integer from 1 to 10`);
+              else max = spec.max;
+            }
+            let box = null;
+            if (spec.box !== undefined) {
+              const found = boxes.find((b) => b.id === spec.box);
+              if (typeof spec.box !== 'string' || !found) err(`${where}.box: unknown box "${spec.box}"`);
+              else if (found.type !== meta.type) err(`${where}.box must be a ${meta.type} box`);
+              else box = spec.box;
+            }
+            teasers[key] = {
+              enabled,
+              max,
+              box,
+              title: spec.title === undefined ? '' : localText(spec.title, `${where}.title`, { max: 80 }),
+            };
+          }
+        }
+      }
+      home = { hero, doors, links: homeLinks, teasers };
+    }
+  }
+
   if (errors.length) throw new ConfigError(errors);
   return {
     instance,
@@ -509,6 +675,7 @@ export function validateConfig(raw, { baseDir = process.cwd() } = {}) {
     users,
     defaultRole,
     links,
+    home,
     web,
     docs,
     audiences: instanceAudiences,
