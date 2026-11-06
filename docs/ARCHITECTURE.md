@@ -4,7 +4,7 @@ Status: approved design direction; step 1 (sections 3, 4, 4a and the read tools 
 
 ## 1. Principles
 - **Content-neutral core:**
-  - the code contains no project names, texts, colours, paths or domains;
+  - the code contains no project names, texts, paths or domains; the default accent is teal `#0f766e`, and `instance.theme` can replace it;
   - everything project-specific lives in one instance configuration (`instance.yaml`) plus `.env` for secrets;
   - a new instance is a new config, not a code change.
 - **The source stays the single source of truth:** bTeam reads the project repository read-only. Users' own contributions live in bTeam, never in the source repository.
@@ -48,6 +48,8 @@ Boxes are filled by **rules in the instance config**: path globs, filename patte
 | `source-browser` | A file tree and file viewer over the mirror, with include/exclude globs. |
 
 A box may set nav to primary (the default) or advanced, and an integer order; the signed-in nav lists Overview, then primary boxes by order (unset last, ties keep config order), then Workshop and Inbox when enabled, then More, which opens an Advanced page of the advanced boxes plus the mirror commit and sync time.
+
+`home:` in the instance config is the Overview entrance: one sentence, up to four doors, small text links and optional teasers for questions, decisions and the digest. A teaser is omitted when it has no items, and a decision teaser never shows that box's fallback section. Without `home:`, Overview is a generic welcome plus links to Docs, Workshop and Inbox when those features are on. The Overview footer shows the signed-in user as plain text. Technical boxes stay on Advanced by setting `nav: advanced`.
 
 ## 4a. Roles and visibility
 - The instance config defines **roles**. Each user account (in the instance database) has one role; `users:` in the config may only suggest a default role for `bteam user add`, never credentials.

@@ -2,6 +2,11 @@
 const STRINGS = {
   en: {
     home: 'Overview',
+    homeFallback: 'Welcome to this panel.',
+    docs: 'Docs',
+    teaserQuestions: 'Open questions',
+    teaserDecisions: 'Decisions',
+    teaserDigest: "What's new",
     mainNav: 'Main navigation',
     more: 'More',
     advanced: 'Advanced',
@@ -76,6 +81,11 @@ const STRINGS = {
   },
   nb: {
     home: 'Oversikt',
+    homeFallback: 'Velkommen til dette panelet.',
+    docs: 'Dokumentasjon',
+    teaserQuestions: 'Åpne spørsmål',
+    teaserDecisions: 'Beslutninger',
+    teaserDigest: 'Hva er nytt',
     mainNav: 'Hovednavigasjon',
     more: 'Mer',
     advanced: 'Avansert',

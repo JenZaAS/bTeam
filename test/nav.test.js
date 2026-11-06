@@ -117,14 +117,16 @@ test('advancedView hides source and issue errors and an empty list', () => {
   assert.ok(!html.includes('Nothing here yet.'));
 });
 
-test('homeView shows a source error on the card page', () => {
+test('homeView shows a source error on the generic entrance', () => {
   const html = homeView({
     t,
     locale: 'en',
-    primaryBoxes: [],
     status: { source: { error: 'SOURCE-ERR-XYZ' }, links: [] },
   });
   assert.match(html, /<p class="bt-warn">SOURCE-ERR-XYZ<\/p>/);
+  assert.match(html, /Welcome to this panel/);
+  assert.ok(!html.includes('bt-cards'));
+  assert.ok(!html.includes('bt-door'));
 });
 
 test('layout omits the nav when logged out and lists only primary boxes plus More', () => {
@@ -211,20 +213,24 @@ after(() => {
   B?.close();
 });
 
-test('owner nav and home cards follow primary order; advanced page follows advanced order', async () => {
+test('owner nav follows primary order; Overview does not repeat those boxes as cards', async () => {
   const home = await owner.get('');
   const nav = block(home.text, '<nav', '</nav>');
-  const cards = block(home.text, '<ul class="bt-cards">', '</ul>');
+  const main = block(home.text, '<main', '</main>');
   assert.deepEqual(hrefs(nav), ['./', ...PRIMARY.map((id) => `box?id=${id}`), 'workshop', 'inbox', 'advanced']);
-  assert.deepEqual(hrefs(cards), PRIMARY.map((id) => `box?id=${id}`));
+  assert.ok(!home.text.includes('bt-cards'));
+  assert.ok(!main.includes('box?id='));
+  assert.match(main, /Welcome to this panel/);
+  assert.match(main, /href="workshop"/);
+  assert.match(main, /href="inbox"/);
   const advanced = await owner.get('advanced');
   assert.equal(advanced.status, 200);
-  const main = block(advanced.text, '<main', '</main>');
+  const advancedMain = block(advanced.text, '<main', '</main>');
   assert.deepEqual(
-    hrefs(main).filter((h) => h.startsWith('box?id=')),
+    hrefs(advancedMain).filter((h) => h.startsWith('box?id=')),
     OWNER_ADVANCED.map((id) => `box?id=${id}`),
   );
-  assert.match(main, /<a class="bt-advanced-link" href="box\?id=issues">/);
+  assert.match(advancedMain, /<a class="bt-advanced-link" href="box\?id=issues">/);
 });
 
 test('a hidden advanced box is absent for that role and still open for the owner', async () => {

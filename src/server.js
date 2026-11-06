@@ -7,7 +7,7 @@ import { fileURLToPath } from 'node:url';
 import { NotFound } from './core.js';
 import { strings, pickLocale } from './i18n.js';
 import { createViewer } from './visibility.js';
-import { layout, homeView, advancedView, boxView, documentView, fileView, searchView, notFoundView, sortNavBoxes, splitNavBoxes } from './views.js';
+import { layout, homeView, advancedView, boxView, documentView, fileView, searchView, notFoundView, sortNavBoxes, splitNavBoxes, teaserItems } from './views.js';
 import { loginView, workshopListView, workshopItemView, inboxListView, inboxItemView } from './views-app.js';
 import { parseCookies, serializeCookie, readForm, BodyError, clientAddress, isLoopbackAddress, safeNext, sameOrigin } from './http.js';
 import { randomToken, safeEqual } from './auth.js';
@@ -51,6 +51,35 @@ export function createHandler({ core, auth, workshop = null, inbox = null, theme
   };
   const workshopOn = Boolean(workshop && config.workshop.enabled);
   const inboxOn = Boolean(inbox && config.inbox.enabled);
+
+  async function homeTeasers(viewer, t, locale) {
+    const home = config.home;
+    if (!home) return [];
+    const kinds = [
+      ['questions', 'open-questions', 'teaserQuestions'],
+      ['decisions', 'decisions', 'teaserDecisions'],
+      ['digest', 'digest', 'teaserDigest'],
+    ];
+    const out = [];
+    for (const [kind, type, titleKey] of kinds) {
+      const spec = home.teasers?.[kind];
+      if (!spec?.enabled) continue;
+      const visible = config.boxes.filter((b) => b.type === type && viewer.canSeeBox(b));
+      const box = spec.box ? visible.find((b) => b.id === spec.box) : visible[0];
+      if (!box) continue;
+      let data;
+      try {
+        data = await core.get_box(viewer, box.id);
+      } catch (err) {
+        if (err instanceof NotFound) continue;
+        throw err;
+      }
+      const items = teaserItems(kind, data, spec.max);
+      if (!items.length) continue;
+      out.push({ kind, title: localized(spec.title, locale) || t[titleKey], boxId: box.id, items });
+    }
+    return out;
+  }
 
   const cspFor = (docs) => {
     const parts = ["default-src 'none'"];
@@ -200,7 +229,14 @@ export function createHandler({ core, auth, workshop = null, inbox = null, theme
 
       switch (path) {
         case '/':
-          return page('', homeView({ t, locale, primaryBoxes: primary, status }), { currentBox: '' });
+          return page(t.home, homeView({
+            t,
+            locale,
+            status,
+            home: config.home,
+            teasers: await homeTeasers(viewer, t, locale),
+            features: { docs: Boolean(docsDir), workshop: workshopOn, inbox: inboxOn },
+          }), { currentBox: '' });
         case '/advanced':
           return page(t.advanced, advancedView({ t, locale, advancedBoxes: advanced, status }), { section: 'advanced' });
         case '/box': {

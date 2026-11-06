@@ -198,7 +198,8 @@ test('dev user override only applies to loopback clients and needs an existing u
     assert.equal(r.status, 200);
     const text = await r.text();
     assert.match(text, /Development mode/);
-    assert.match(text, /<code>designer<\/code>/);
+    assert.match(text, /Signed in as designer/);
+    assert.doesNotMatch(/<footer[\s\S]*<\/footer>/.exec(text)[0], /<code>/);
     // A non-loopback client (simulated) gets no override.
     const handler = createHandler({ core: A.core, auth: A.state.auth, devUser: 'designer' });
     const out = {};
@@ -244,8 +245,8 @@ test('browser login sends a same-origin Origin; an Origin of null is still refus
   const home = await c.get('');
   assert.equal(home.status, 200);
   assert.equal(home.headers.get('referrer-policy'), 'same-origin');
-  assert.match(home.text, /Signed in as/);
-  assert.match(home.text, /<code>owner<\/code>/);
+  assert.match(home.text, /Signed in as owner/);
+  assert.doesNotMatch(/<footer[\s\S]*<\/footer>/.exec(home.text)[0], /<code>/);
 });
 
 test('a forged X-Forwarded-Host plus a matching Origin is refused', async () => {
@@ -288,7 +289,8 @@ test('with web.public_origin set, Origin must match it and not X-Forwarded-Host'
   assert.equal(ok.status, 303);
   const home = await c.get('');
   assert.equal(home.status, 200);
-  assert.match(home.text, /<code>owner<\/code>/);
+  assert.match(home.text, /Signed in as owner/);
+  assert.match((await c.get('advanced')).text, /<code>owner<\/code>/);
 });
 
 test('non-secure cookie mode uses plain cookie names without Secure', async () => {
@@ -347,7 +349,7 @@ test('a second login page keeps the first form able to sign in', async () => {
   assert.equal(r.headers.get('location'), './');
   const home = await c.get('');
   assert.equal(home.status, 200);
-  assert.match(home.text, /<code>owner<\/code>/);
+  assert.match(home.text, /Signed in as owner/);
 });
 
 test('the per-account login limit locks at the configured threshold', async () => {

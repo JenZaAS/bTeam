@@ -51,7 +51,8 @@ boxes:
 
   - id: gallery
     type: gallery
-    nav: primary
+    title: { en: Design, nb: Design }
+    nav: primary                     # stays in the nav; Overview only adds a small link, not a door
     order: 60
     root: "screenshots/"
     group_by_folder: date            # date (newest first), folder (A-Z) or none
@@ -94,6 +95,40 @@ issue_source:                        # read-only issue listing for the issues/qu
 links:
   - label: Example test site
     url: https://test.example.com
+
+# Optional Overview entrance. Omit the whole block for a generic welcome plus links to
+# Docs, Workshop and Inbox when those features are on. No project name is built into the page.
+# hero is one sentence, so both doors fit on a narrow screen.
+# Put the destination in label and blurb. Leave the route out of the label.
+# links are small text links, not doors. A design gallery stays a primary box in the nav.
+# Teasers render only when that box has items. Decisions use decision records only,
+# never a box fallback section. A leading slash on href is removed (docs/, workshop).
+home:
+  hero:
+    en: "Read the specifications, or sketch ideas in the workshop."
+    nb: "Les spesifikasjonene, eller skisser ideer i verkstedet."
+  doors:
+    - id: specs
+      label: { en: Specifications, nb: Spesifikasjoner }
+      href: /docs/
+      blurb:
+        en: "Short pages about the product, in plain language."
+        nb: "Korte sider om produktet, i vanlig språk."
+      tag: { en: Read, nb: Les }
+    - id: workshop
+      label: { en: Workshop, nb: Verksted }
+      href: /workshop
+      blurb:
+        en: "Private notes and ideas, visible only to you."
+        nb: "Private notater og ideer, synlige bare for deg."
+      tag: { en: Write, nb: Skriv }
+  links:
+    - label: { en: Design, nb: Design }
+      href: box?id=gallery
+  teasers:
+    questions: { enabled: true, max: 3, box: questions }
+    decisions: { enabled: true, max: 3, box: decisions }
+    digest: { enabled: true, box: digest }
 
 # Markdown is listed and served only when front matter audience is in this list.
 # When the key is omitted, the list is [all]. A role's audiences list, when set,
