@@ -199,6 +199,50 @@ test('home entrance normalises paths and rejects a broken block', () => {
   hop.home = { hero: 'Hello.', doors: [{ id: 'specs', label: 'Specs', href: '../secret' }] };
   assert.throws(() => validateConfig(hop), /relative app path/);
 
+  const ctrlBeforeScheme = base();
+  ctrlBeforeScheme.home = {
+    hero: 'Hello.',
+    doors: [{ id: 'specs', label: 'Specs', href: '\njavascript:alert(1)' }],
+  };
+  assert.throws(() => validateConfig(ctrlBeforeScheme), /relative app path/);
+
+  const zwSpace = base();
+  zwSpace.home = {
+    hero: 'Hello.',
+    doors: [{ id: 'specs', label: 'Specs', href: 'docs/\u200bpage' }],
+  };
+  assert.throws(() => validateConfig(zwSpace), /relative app path/);
+
+  const bom = base();
+  bom.home = {
+    hero: 'Hello.',
+    doors: [{ id: 'specs', label: 'Specs', href: '\ufeffdocs/' }],
+  };
+  assert.throws(() => validateConfig(bom), /relative app path/);
+
+  const encHop = base();
+  encHop.home = { hero: 'Hello.', doors: [{ id: 'specs', label: 'Specs', href: 'docs/%2e%2e/other' }] };
+  assert.throws(() => validateConfig(encHop), /relative app path/);
+
+  const dotEncHop = base();
+  dotEncHop.home = { hero: 'Hello.', doors: [{ id: 'specs', label: 'Specs', href: 'docs/.%2e/other' }] };
+  assert.throws(() => validateConfig(dotEncHop), /relative app path/);
+
+  const doubleEncHop = base();
+  doubleEncHop.home = {
+    hero: 'Hello.',
+    doors: [{ id: 'specs', label: 'Specs', href: 'docs/%252e%252e/other' }],
+  };
+  assert.throws(() => validateConfig(doubleEncHop), /relative app path/);
+
+  const encSlash = base();
+  encSlash.home = { hero: 'Hello.', doors: [{ id: 'specs', label: 'Specs', href: 'docs%2fother' }] };
+  assert.throws(() => validateConfig(encSlash), /relative app path/);
+
+  const encBackslash = base();
+  encBackslash.home = { hero: 'Hello.', doors: [{ id: 'specs', label: 'Specs', href: 'docs%5cother' }] };
+  assert.throws(() => validateConfig(encBackslash), /relative app path/);
+
   const badBox = base();
   badBox.home = {
     hero: 'Hello.',

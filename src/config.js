@@ -3,7 +3,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import YAML from 'yaml';
-import { parseDuration } from './util.js';
+import { parseDuration, hasRelativeHop } from './util.js';
 
 export const BOX_TYPES = {
   digest: ['path', 'pattern', 'latest'],
@@ -99,19 +99,31 @@ export function validateConfig(raw, { baseDir = process.cwd() } = {}) {
     return out;
   };
   // App paths stay relative so the UI still works behind a path prefix. A leading slash is removed.
+  const APP_HREF_CTRL = /[\x00-\x1f\x7f]/;
   const appHref = (v, where) => {
     if (typeof v !== 'string') {
       err(`${where} must be a relative app path`);
       return '';
     }
+    if (APP_HREF_CTRL.test(v) || v.includes('\u200b') || v.includes('\ufeff')) {
+      err(`${where} must be a relative app path`);
+      return '';
+    }
     const s = v.trim();
     const pathOnly = s.split(/[?#]/, 1)[0];
+    if (!s) {
+      err(`${where} must be a relative app path`);
+      return '';
+    }
+    if (hasRelativeHop(pathOnly) || /%2f|%5c/i.test(pathOnly)) {
+      err(`${where} must be a relative app path`);
+      return '';
+    }
     if (
-      !s ||
       s.length > 300 ||
       /^[a-z][a-z0-9+.-]*:/i.test(s) ||
       s.startsWith('//') ||
-      /[\\\s\0]/.test(s) ||
+      /[\\\s]/.test(s) ||
       /(^|\/)\.\.(\/|$)/.test(pathOnly)
     ) {
       err(`${where} must be a relative app path`);

@@ -76,7 +76,7 @@ test('decision and question teasers are empty when there is nothing real to show
 });
 
 test('core files do not ship project copy or an empty-teaser placeholder', () => {
-  const banned = ['LikeFiction', 'likefiction', 'BUILD_PLAN', 'Ingen ennå', '(/docs)', 'Spesifikasjoner'];
+  const banned = ['FixtureBrandAlpha', 'fixturebrandalpha', 'BUILD_PLAN', 'Ingen ennå', '(/docs)', 'Spesifikasjoner'];
   const files = [];
   const walk = (dir) => {
     for (const name of fs.readdirSync(dir)) {
@@ -155,7 +155,7 @@ test('home: present renders both doors, a small design link, and only teasers th
   assert.ok(!main.includes('(/docs)'));
   assert.ok(!main.includes('BUILD_PLAN'));
   assert.ok(!main.includes('CASCADE'));
-  assert.ok(!main.includes('LikeFiction'));
+  assert.ok(!main.includes('FixtureBrandAlpha'));
   assert.ok(!main.includes('bt-cards'));
   assert.match(main, /Open questions/);
   assert.match(main, /Which colour for the header\?/);
@@ -195,7 +195,7 @@ test('Norwegian copy comes from home:, not from a built-in product string', asyn
   assert.match(main, /<h2>Spesifikasjoner<\/h2>/);
   assert.match(main, /Åpne spørsmål/);
   assert.ok(!main.includes('(/docs)'));
-  assert.ok(!main.includes('LikeFiction'));
+  assert.ok(!main.includes('FixtureBrandAlpha'));
 });
 
 test('home: with empty teasers hides them, including a decision fallback', async () => {
@@ -229,7 +229,7 @@ test('without home: the entrance is a generic welcome and feature links', async 
     assert.ok(!main.includes('bt-cards'));
     assert.ok(!main.includes('bt-teaser'));
     assert.ok(!main.includes('box?id='));
-    assert.ok(!main.includes('LikeFiction'));
+    assert.ok(!main.includes('FixtureBrandAlpha'));
     assert.ok(!main.includes('Spesifikasjoner'));
     assert.match(nav, /href="box\?id=design"/);
     const nb = block((await user.get('', { 'Accept-Language': 'nb' })).text, '<main', '</main>');
@@ -256,7 +256,7 @@ test('without home: and with workshop, inbox and docs off, only the welcome rema
     assert.ok(!main.includes('href="inbox"'));
     assert.ok(!main.includes('href="docs/'));
     assert.ok(!main.includes('bt-door'));
-    assert.ok(!main.includes('LikeFiction'));
+    assert.ok(!main.includes('FixtureBrandAlpha'));
   } finally {
     app.close();
   }
