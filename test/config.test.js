@@ -206,6 +206,13 @@ test('home entrance normalises paths and rejects a broken block', () => {
   };
   assert.throws(() => validateConfig(ctrlBeforeScheme), /relative app path/);
 
+  const ctrlSoH = base();
+  ctrlSoH.home = {
+    hero: 'Hello.',
+    doors: [{ id: 'specs', label: 'Specs', href: 'docs/\x01more' }],
+  };
+  assert.throws(() => validateConfig(ctrlSoH), /relative app path/);
+
   const zwSpace = base();
   zwSpace.home = {
     hero: 'Hello.',

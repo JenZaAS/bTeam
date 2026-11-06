@@ -32,7 +32,7 @@ function entrance(url) {
     doors: [
       {
         id: 'specs',
-        label: { en: 'Specifications', nb: 'Spesifikasjoner' },
+        label: { en: 'Specifications-generic', nb: 'Generiske krav' },
         href: '/docs/',
         blurb: { en: 'Short pages in plain language.', nb: 'Korte sider i vanlig språk.' },
         tag: { en: 'Read', nb: 'Les' },
@@ -76,7 +76,7 @@ test('decision and question teasers are empty when there is nothing real to show
 });
 
 test('core files do not ship project copy or an empty-teaser placeholder', () => {
-  const banned = ['FixtureBrandAlpha', 'fixturebrandalpha', 'BUILD_PLAN', 'Ingen ennå', '(/docs)', 'Spesifikasjoner'];
+  const banned = ['FixtureBrandAlpha', 'fixturebrandalpha', 'AcmePlan', 'Ingen ennå', '(/docs)', 'Specifications-generic'];
   const files = [];
   const walk = (dir) => {
     for (const name of fs.readdirSync(dir)) {
@@ -113,7 +113,7 @@ test('a configured entrance renders doors from the view, with no card grid', () 
     home: validateConfig(entrance('https://git.example.com/org/repo.git')).home,
     teasers: [],
   });
-  assert.match(html, /<a class="bt-door" href="docs\/">[\s\S]*<h2>Specifications<\/h2>[\s\S]*<\/a>/);
+  assert.match(html, /<a class="bt-door" href="docs\/">[\s\S]*<h2>Specifications-generic<\/h2>[\s\S]*<\/a>/);
   assert.match(html, /<a class="bt-door" href="workshop">[\s\S]*<h2>Workshop<\/h2>[\s\S]*<\/a>/);
   assert.match(html, /<a href="box\?id=design">Design<\/a>/);
   assert.ok(!html.includes('bt-cards'));
@@ -148,12 +148,12 @@ test('home: present renders both doors, a small design link, and only teasers th
   assert.match(nav, /href="box\?id=design"/);
   assert.ok(!nav.includes('box?id=source'));
   assert.match(main, /<h1 class="bt-hero">Read the notes, or sketch in the workshop\.<\/h1>/);
-  assert.match(main, /<a class="bt-door" href="docs\/">[\s\S]*<h2>Specifications<\/h2>[\s\S]*Short pages in plain language\.[\s\S]*<\/a>/);
+  assert.match(main, /<a class="bt-door" href="docs\/">[\s\S]*<h2>Specifications-generic<\/h2>[\s\S]*Short pages in plain language\.[\s\S]*<\/a>/);
   assert.match(main, /<a class="bt-door" href="workshop">[\s\S]*<h2>Workshop<\/h2>[\s\S]*<\/a>/);
   assert.match(main, /<nav class="bt-home-links"[^>]*>\s*<a href="box\?id=design">Design<\/a><\/nav>/);
   assert.ok(!main.includes('class="bt-door" href="box?id=design"'));
   assert.ok(!main.includes('(/docs)'));
-  assert.ok(!main.includes('BUILD_PLAN'));
+  assert.ok(!main.includes('AcmePlan'));
   assert.ok(!main.includes('CASCADE'));
   assert.ok(!main.includes('FixtureBrandAlpha'));
   assert.ok(!main.includes('bt-cards'));
@@ -192,7 +192,7 @@ test('a role that cannot see the questions box does not get that teaser', async 
 test('Norwegian copy comes from home:, not from a built-in product string', async () => {
   const main = block((await owner.get('', { 'Accept-Language': 'nb' })).text, '<main', '</main>');
   assert.match(main, /<h1 class="bt-hero">Les notatene, eller skisser i verkstedet\.<\/h1>/);
-  assert.match(main, /<h2>Spesifikasjoner<\/h2>/);
+  assert.match(main, /<h2>Generiske krav<\/h2>/);
   assert.match(main, /Åpne spørsmål/);
   assert.ok(!main.includes('(/docs)'));
   assert.ok(!main.includes('FixtureBrandAlpha'));
@@ -210,7 +210,7 @@ test('home: with empty teasers hides them, including a decision fallback', async
   assert.ok(!main.includes('Ingen ennå'));
   assert.ok(!main.includes('a pending choice'));
   assert.ok(!main.includes('PLAN.md'));
-  assert.ok(!main.includes('BUILD_PLAN'));
+  assert.ok(!main.includes('AcmePlan'));
 });
 
 test('without home: the entrance is a generic welcome and feature links', async () => {
@@ -230,7 +230,7 @@ test('without home: the entrance is a generic welcome and feature links', async 
     assert.ok(!main.includes('bt-teaser'));
     assert.ok(!main.includes('box?id='));
     assert.ok(!main.includes('FixtureBrandAlpha'));
-    assert.ok(!main.includes('Spesifikasjoner'));
+    assert.ok(!main.includes('Generiske krav'));
     assert.match(nav, /href="box\?id=design"/);
     const nb = block((await user.get('', { 'Accept-Language': 'nb' })).text, '<main', '</main>');
     assert.match(nb, /Velkommen til dette panelet\./);
